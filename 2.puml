@@ -1,0 +1,68 @@
+@startuml
+!define primary_key(x) <b>x</b>
+!define foreign_key(x) <u>x</u>
+
+entity "Пользователь" as User {
+    primary_key(id) : UUID
+    email : Email
+    имя_пользователя : String
+    пароль : String
+    фото_профиля : String (URL)
+}
+
+entity "Категория" as Category {
+    primary_key(id) : UUID
+    название : String
+}
+
+entity "Товар" as Product {
+    primary_key(id) : UUID
+    название : String
+    описание : Text
+    цена : Decimal
+    количество : Integer
+    изображение : String (URL)
+    foreign_key(категория_id) : UUID
+}
+
+entity "Заказ" as Order {
+    primary_key(id) : UUID
+    foreign_key(пользователь_id) : UUID
+    статус : String
+    общая_цена : Decimal
+    дата_создания : DateTime
+}
+
+entity "Товары в заказе" as OrderItem {
+    primary_key(id) : UUID
+    foreign_key(заказ_id) : UUID
+    foreign_key(товар_id) : UUID
+    количество : Integer
+    цена : Decimal
+}
+
+entity "Отзыв" as Review {
+    primary_key(id) : UUID
+    foreign_key(пользователь_id) : UUID
+    foreign_key(товар_id) : UUID
+    рейтинг : Integer
+    комментарий : Text
+    дата_создания : DateTime
+}
+
+entity "Избранное" as Wishlist {
+    primary_key(id) : UUID
+    foreign_key(пользователь_id) : UUID
+    foreign_key(товар_id) : UUID
+}
+
+' Определение связей
+User ||--o{ Order : "оформляет"
+User ||--o{ Review : "пишет"
+User ||--o{ Wishlist : "сохраняет"
+Order ||--o{ OrderItem : "содержит"
+Product ||--o{ OrderItem : "включён в"
+Product ||--o{ Review : "имеет"
+Product ||--o{ Wishlist : "в избранном"
+Category ||--o{ Product : "включает"
+@enduml

@@ -1,0 +1,15 @@
+{% extends "main/layout.html" %}
+{% load static %}
+{% block title %}Регестрация{% endblock %}
+
+{% block content %}
+    <h3 class="">Регестрация</h3>
+    <form class="requires-validation" method='post' enctype="multipart/form-data">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <div class="">
+            <button id="submit" type="submit" class="">Зарегестрироваться</button>
+        </div>
+        <p>Уже есть аккаунт? <a href="{% url 'login' %}">Войдите</a>.</p>
+    </form>
+{% endblock %}

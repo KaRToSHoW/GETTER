@@ -1,0 +1,63 @@
+@startuml
+entity "Пользователь" as User {
+    * id
+    ---
+    email
+    имя_пользователя
+    пароль
+    фото_профиля
+}
+
+entity "Категория" as Category {
+    * id
+    ---
+    название
+}
+
+entity "Товар" as Product {
+    * id
+    ---
+    название
+    описание
+    цена
+    количество
+    изображение
+}
+
+entity "Заказ" as Order {
+    * id
+    ---
+    статус
+    общая_цена
+    дата_создания
+}
+
+entity "Товары в заказе" as OrderItem {
+    * id
+    ---
+    количество
+    цена
+}
+
+entity "Отзыв" as Review {
+    * id
+    ---
+    рейтинг
+    комментарий
+    дата_создания
+}
+
+entity "Избранное" as Wishlist {
+    * id
+}
+
+' Определение связей (инфологический уровень)
+User ||--o{ Order : "оформляет"
+User ||--o{ Review : "пишет"
+User ||--o{ Wishlist : "сохраняет"
+Order ||--o{ OrderItem : "содержит"
+Product ||--o{ OrderItem : "включён в"
+Product ||--o{ Review : "имеет"
+Product ||--o{ Wishlist : "в избранном"
+Category ||--o{ Product : "включает"
+@enduml
