@@ -3,8 +3,8 @@ from django.db import models
 from django.conf import settings
 
 class User(AbstractUser):
-    email = models.EmailField(unique=True)
-    profile_image = models.ImageField(upload_to='profile_images/', blank=True, null=True)
+    email = models.EmailField(unique=True, verbose_name="Почта")
+    profile_image = models.ImageField(upload_to='profile_images/', blank=True, null=True, verbose_name="Картинка профиля")
 
     class Meta:
         verbose_name = "Пользователь"

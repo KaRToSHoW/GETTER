@@ -1,0 +1,93 @@
+# main/serializers.py
+from rest_framework import serializers
+from .models import Category, Product, Order, OrderItem, Review, Wishlist
+
+class CategorySerializer(serializers.ModelSerializer):
+    image = serializers.ImageField(required=False, allow_null=True)
+    url = serializers.SerializerMethodField()
+    product_count = serializers.IntegerField(read_only=True, required=False)  # Количество продуктов
+
+    class Meta:
+        model = Category
+        fields = ['id', 'name', 'image', 'url', 'product_count']
+
+    def get_url(self, obj):
+        return obj.get_absolute_url()
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        if instance.image:
+            request = self.context.get('request')
+            if request:
+                representation['image'] = request.build_absolute_uri(instance.image.url)
+        return representation
+    
+class ProductSerializer(serializers.ModelSerializer):
+    category = CategorySerializer(read_only=True)
+    image = serializers.ImageField(required=False, allow_null=True)
+    url = serializers.SerializerMethodField()
+    average_rating = serializers.FloatField(read_only=True, required=False)  # Средний рейтинг
+
+    class Meta:
+        model = Product
+        fields = ['id', 'sku', 'name', 'description', 'price', 'stock', 'category', 'image', 'is_available', 'specifications', 'url', 'average_rating']
+
+    def get_url(self, obj):
+        return obj.get_absolute_url()
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        if instance.image:
+            request = self.context.get('request')
+            if request:
+                representation['image'] = request.build_absolute_uri(instance.image.url)
+        return representation
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = ['id', 'order', 'product', 'quantity', 'price']
+
+class OrderSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(many=True, read_only=True)
+    user = serializers.StringRelatedField(read_only=True)
+    url = serializers.SerializerMethodField()
+    total_orders_sum = serializers.FloatField(read_only=True, required=False)  # Сумма всех заказов пользователя
+
+    class Meta:
+        model = Order
+        fields = ['id', 'user', 'status', 'total_price', 'created_at', 'updated_at', 'order_number', 'items', 'url', 'total_orders_sum']
+
+    def get_url(self, obj):
+        return obj.get_absolute_url()
+
+class ReviewSerializer(serializers.ModelSerializer):
+    user = serializers.StringRelatedField(read_only=True)
+    product = ProductSerializer(read_only=True)
+
+    class Meta:
+        model = Review
+        fields = ['id', 'user', 'product', 'rating', 'comment', 'created_at']
+
+    def create(self, validated_data):
+        product = self.context.get('product')
+        user = self.context.get('user')
+        if not product or not user:
+            raise serializers.ValidationError("Product or user is missing in context")
+        review = Review.objects.create(
+            product=product,
+            user=user,
+            rating=validated_data['rating'],
+            comment=validated_data.get('comment', '')
+        )
+        return review
+
+class WishlistSerializer(serializers.ModelSerializer):
+    user = serializers.StringRelatedField(read_only=True)
+    product = ProductSerializer(read_only=True)
+
+    class Meta:
+        model = Wishlist
+        fields = ['id', 'user', 'product', 'added_at']
