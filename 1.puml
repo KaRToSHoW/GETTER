@@ -1,6 +1,6 @@
 @startuml
 entity "Пользователь" as User {
-    * id
+    id
     ---
     email
     имя_пользователя
@@ -9,13 +9,14 @@ entity "Пользователь" as User {
 }
 
 entity "Категория" as Category {
-    * id
+    id
     ---
     название
 }
 
 entity "Товар" as Product {
-    * id
+    id
+    category_id
     ---
     название
     описание
@@ -25,7 +26,8 @@ entity "Товар" as Product {
 }
 
 entity "Заказ" as Order {
-    * id
+    id
+    user_id
     ---
     статус
     общая_цена
@@ -33,14 +35,18 @@ entity "Заказ" as Order {
 }
 
 entity "Товары в заказе" as OrderItem {
-    * id
+    id
+    order_id
+    product_id
     ---
     количество
     цена
 }
 
 entity "Отзыв" as Review {
-    * id
+    id
+    user_id
+    product_id
     ---
     рейтинг
     комментарий
@@ -48,16 +54,21 @@ entity "Отзыв" as Review {
 }
 
 entity "Избранное" as Wishlist {
-    * id
+    id
+    user_id
+    product_id
 }
 
 ' Определение связей (инфологический уровень)
-User ||--o{ Order : "оформляет"
-User ||--o{ Review : "пишет"
-User ||--o{ Wishlist : "сохраняет"
+User ||--o{ Order : "оформляет" 
 Order ||--o{ OrderItem : "содержит"
 Product ||--o{ OrderItem : "включён в"
+
+User ||--o{ Review : "пишет"
 Product ||--o{ Review : "имеет"
+
+User ||--o{ Wishlist : "сохраняет"
 Product ||--o{ Wishlist : "в избранном"
+
 Category ||--o{ Product : "включает"
 @enduml
