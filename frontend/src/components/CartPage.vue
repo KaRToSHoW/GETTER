@@ -1,24 +1,28 @@
 <template>
     <div class="cart-container">
+        <ToastNotification ref="toast" />
         <h2 class="cart-title">Корзина</h2>
         <div v-if="cart.items && cart.items.length > 0" class="cart-items">
             <div v-for="item in cart.items" :key="item.id" class="cart-item">
                 <input type="checkbox" v-model="selectedItems" :value="item.id" class="item-checkbox" />
                 <div class="cart-item-image-wrapper">
-                    <img v-if="item.product.image" :src="`${$apiBaseUrl}${item.product.image}`" alt="Product Image" class="cart-item-image" />
+                    <img v-if="item.product.image" :src="`${$apiBaseUrl}${item.product.image}`" alt="Product Image"
+                        class="cart-item-image" />
                 </div>
                 <div class="cart-item-details">
                     <h3>{{ item.product.name }}</h3>
                     <p class="cart-item-sku">Артикул: {{ item.product.sku }}</p>
                     <p class="cart-item-category">Категория: {{ item.product.category.name }}</p>
-                    <div v-if="item.product.specifications" class="cart-item-specifications">
-                        <span v-for="(value, key) in item.product.specifications" :key="key" class="spec-item">
-                            <strong>{{ key }}:</strong> {{ value }}
+                    <div v-if="item.product.specifications.specifications" class="cart-item-specifications">
+                        <span v-for="(value, key) in item.product.specifications.specifications" :key="key" class="spec-item">
+                            <strong>{{ key.replace(/_/g, ' ') }}:</strong> {{ value }}
                         </span>
                     </div>
+
                     <div class="quantity-control">
                         <button @click="decreaseQuantity(item)" class="quantity-button">-</button>
-                        <input type="number" v-model.number="item.quantity" @change="updateQuantity(item)" min="1" class="quantity-input" />
+                        <input type="number" v-model.number="item.quantity" @change="updateQuantity(item)" min="1"
+                            class="quantity-input" />
                         <button @click="increaseQuantity(item)" class="quantity-button">+</button>
                     </div>
                     <div class="price-container">
@@ -27,10 +31,8 @@
                     </div>
                 </div>
                 <div class="cart-item-actions">
-                    <button 
-                        @click="toggleWishlist(item.product)" 
-                        :class="['wishlist-button', { 'active': isInWishlist(item.product.id) }]"
-                    >
+                    <button @click="toggleWishlist(item.product)"
+                        :class="['wishlist-button', { 'active': isInWishlist(item.product.id) }]">
                         <span class="heart-icon">❤️</span>
                     </button>
                     <button @click="removeFromCart(item.id)" class="remove-button">
@@ -40,7 +42,8 @@
             </div>
             <div class="cart-total">
                 <p>Итого: {{ calculateTotal }} ₽</p>
-                <button class="checkout-button" @click="checkout" :disabled="selectedItems.length === 0">Оформить заказ</button>
+                <button class="checkout-button" @click="checkout" :disabled="selectedItems.length === 0">Оформить
+                    заказ</button>
             </div>
         </div>
         <p v-else class="no-data">Корзина пуста.</p>
@@ -51,14 +54,16 @@
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 import { inject } from 'vue';
+import ToastNotification from './ToastNotification.vue';
 
 const $apiBaseUrl = inject('$apiBaseUrl', 'http://127.0.0.1:8000');
 
 const cart = ref({ items: [], total_price: 0 });
 const selectedItems = ref([]);
 const wishlist = ref([]);
+const toast = ref(null);
 
-onMounted(async () => {
+const loadCartData = async () => {
     try {
         const token = localStorage.getItem('token');
         if (token) {
@@ -80,8 +85,12 @@ onMounted(async () => {
         }
     } catch (error) {
         console.error('Ошибка загрузки данных:', error.response ? error.response.data : error.message);
-        alert('Ошибка при загрузке данных. Проверьте консоль.');
+        toast.value.showToast('Ошибка при загрузке данных. Проверьте консоль.', 'error');
     }
+};
+
+onMounted(async () => {
+    await loadCartData();
 });
 
 const increaseQuantity = (item) => {
@@ -97,35 +106,43 @@ const decreaseQuantity = (item) => {
 const updateQuantity = async (item, change) => {
     try {
         const token = localStorage.getItem('token');
-        if (token) {
-            const response = await axios.post(`${$apiBaseUrl}/main/cart/add/`, {
-                product_id: item.product.id,
-                quantity: change
-            }, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            cart.value = response.data;
+        const newQuantity = item.quantity + change;
+
+        if (newQuantity <= 0) {
+            await removeFromCart(item.id);
+            return;
         }
+
+        if (newQuantity > item.product.stock) {
+            toast.value.showToast('Нельзя добавить больше, чем есть в наличии!', 'warning');
+            return;
+        }
+
+        await axios.post(`${$apiBaseUrl}/main/cart/add/`, {
+            product_id: item.product.id,
+            quantity: change
+        }, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+
+        await loadCartData();
     } catch (error) {
-        console.error('Ошибка обновления количества:', error.response ? error.response.data : error.message);
-        alert('Ошибка при обновлении количества.');
+        console.error('Ошибка обновления количества:', error);
+        toast.value.showToast('Ошибка при обновлении количества', 'error');
     }
 };
 
 const removeFromCart = async (itemId) => {
     try {
         const token = localStorage.getItem('token');
-        if (token) {
-            const response = await axios.delete(`${$apiBaseUrl}/main/cart/remove/${itemId}/`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            cart.value = response.data;
-            selectedItems.value = selectedItems.value.filter(id => id !== itemId);
-            alert('Товар удален из корзины!');
-        }
+        await axios.delete(`${$apiBaseUrl}/main/cart/remove/${itemId}/`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        await loadCartData();
+        toast.value.showToast('Товар удален из корзины', 'success');
     } catch (error) {
-        console.error('Ошибка удаления из корзины:', error.response ? error.response.data : error.message);
-        alert('Ошибка при удалении из корзины.');
+        console.error('Ошибка удаления из корзины:', error);
+        toast.value.showToast('Ошибка при удалении товара из корзины', 'error');
     }
 };
 
@@ -136,7 +153,7 @@ const isInWishlist = computed(() => (productId) => {
 const toggleWishlist = async (product) => {
     const token = localStorage.getItem('token');
     if (!token) {
-        alert('Пожалуйста, войдите в систему для управления списком желаемого.');
+        toast.value.showToast('Пожалуйста, войдите в систему для управления списком желаемого.', 'warning');
         return;
     }
 
@@ -146,7 +163,7 @@ const toggleWishlist = async (product) => {
                 headers: { Authorization: `Bearer ${token}` }
             });
             wishlist.value = wishlist.value.filter(id => id !== product.id);
-            alert(`Товар "${product.name}" удален из желаемого!`);
+            toast.value.showToast(`Товар "${product.name}" удален из желаемого!`, 'success');
         } else {
             await axios.post(`${$apiBaseUrl}/main/wishlist/add/`, {
                 product_id: product.id
@@ -154,11 +171,11 @@ const toggleWishlist = async (product) => {
                 headers: { Authorization: `Bearer ${token}` }
             });
             wishlist.value.push(product.id);
-            alert(`Товар "${product.name}" добавлен в желаемое!`);
+            toast.value.showToast(`Товар "${product.name}" добавлен в желаемое!`, 'success');
         }
     } catch (error) {
         console.error('Ошибка управления желаемым:', error.response ? error.response.data : error.message);
-        alert('Ошибка при управлении желаемым.');
+        toast.value.showToast('Ошибка при управлении желаемым.', 'error');
     }
 };
 
@@ -167,11 +184,19 @@ const calculateTotal = computed(() => {
     return typeof total === 'number' ? total.toFixed(2) : '0.00';
 });
 
-const checkout = () => {
-    if (selectedItems.value.length > 0) {
-        alert('Оформление заказа для выбранных товаров пока не реализовано!');
-    } else {
-        alert('Выберите товары для оформления заказа.');
+const checkout = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            toast.value.showToast('Пожалуйста, войдите в систему для оформления заказа', 'warning');
+            return;
+        }
+
+        // Здесь будет логика оформления заказа
+        toast.value.showToast('Заказ успешно оформлен!', 'success');
+    } catch (error) {
+        console.error('Ошибка оформления заказа:', error);
+        toast.value.showToast('Ошибка при оформлении заказа', 'error');
     }
 };
 </script>

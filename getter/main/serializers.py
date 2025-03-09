@@ -1,6 +1,7 @@
 # main/serializers.py
 from rest_framework import serializers
 from .models import Category, Product, Order, OrderItem, Review, Wishlist
+from users.serializers import UserSerializer
 
 class CategorySerializer(serializers.ModelSerializer):
     image = serializers.ImageField(required=False, allow_null=True)
@@ -64,12 +65,12 @@ class OrderSerializer(serializers.ModelSerializer):
         return obj.get_absolute_url()
 
 class ReviewSerializer(serializers.ModelSerializer):
-    user = serializers.StringRelatedField(read_only=True)
+    user = UserSerializer(read_only=True)
     product = ProductSerializer(read_only=True)
 
     class Meta:
         model = Review
-        fields = ['id', 'user', 'product', 'rating', 'comment', 'created_at']
+        fields = ['id', 'user', 'product', 'rating', 'comment', 'pros', 'cons', 'created_at']
 
     def create(self, validated_data):
         product = self.context.get('product')
@@ -80,7 +81,9 @@ class ReviewSerializer(serializers.ModelSerializer):
             product=product,
             user=user,
             rating=validated_data['rating'],
-            comment=validated_data.get('comment', '')
+            comment=validated_data.get('comment', ''),
+            pros=validated_data.get('pros', ''),
+            cons=validated_data.get('cons', '')
         )
         return review
 

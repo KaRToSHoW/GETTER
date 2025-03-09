@@ -70,7 +70,7 @@ class Order(models.Model):
         verbose_name_plural = "Заказы"
 
     def calculate_total_price(self):
-        return sum(item.price for item in self.order_items.all())
+        return sum(item.price for item in self.items.all())
 
     def save(self, *args, **kwargs):
         # Генерация номера заказа, если его нет
@@ -110,6 +110,8 @@ class Review(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="reviews", verbose_name="Товар")
     rating = models.PositiveIntegerField(choices=RATING_CHOICES, default=5, verbose_name="Рейтинг")
     comment = models.TextField(blank=True, null=True, verbose_name="Отзыв")
+    pros = models.TextField(blank=True, null=True, verbose_name="Плюсы")
+    cons = models.TextField(blank=True, null=True, verbose_name="Минусы")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
 
     class Meta:
