@@ -3,7 +3,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import User
-from .forms import RegistrationForm, LoginForm  # Создадим их ниже
+
 from rest_framework import viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from .serializers import UserSerializer

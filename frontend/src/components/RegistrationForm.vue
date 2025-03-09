@@ -44,33 +44,46 @@
             <p class="login-link">Уже есть аккаунт? <router-link to="/login">Войдите</router-link>.</p>
         </div>
     </div>
+    <ToastNotification ref="toast" />
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, inject } from 'vue';
+import { useRouter } from 'vue-router';
 import axios from 'axios';
+import ToastNotification from './ToastNotification.vue';
 
 const username = ref('');
 const email = ref('');
 const password = ref('');
 const password2 = ref('');
+const toast = ref(null);
+const router = useRouter();
+const API_BASE_URL = inject('$apiBaseUrl', 'http://127.0.0.1:8000');
 
 const handleRegistration = async () => {
     if (password.value !== password2.value) {
-        alert('Пароли не совпадают!');
+        toast.value.showToast('Пароли не совпадают!', 'error');
         return;
     }
 
     try {
-        const response = await axios.post('http://127.0.0.1:8000/users/api/register/', {
+        await axios.post(`${API_BASE_URL}/auth/register/`, {
             username: username.value,
             email: email.value,
-            password: password.value,
+            password: password.value
         });
-        alert(`Регистрация успешна! Код ответа: ${response.status}`);
+
+        toast.value.showToast('Регистрация успешна! Теперь вы можете войти.', 'success');
+        router.push('/login');
     } catch (error) {
-        console.error('Ошибка при регистрации:', error);
-        alert('Ошибка регистрации');
+        console.error('Ошибка регистрации:', error.response ? error.response.data : error.message);
+        if (error.response && error.response.data) {
+            const errors = Object.values(error.response.data).flat().join(', ');
+            toast.value.showToast(`Ошибка регистрации: ${errors}`, 'error');
+        } else {
+            toast.value.showToast('Ошибка при регистрации. Попробуйте позже.', 'error');
+        }
     }
 };
 </script>

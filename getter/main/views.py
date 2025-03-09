@@ -57,7 +57,9 @@ class ReviewListCreateView(APIView):
             # Добавляем product и user в контекст сериализатора
             serializer = ReviewSerializer(data={
                 'rating': request.data.get('rating'),
-                'comment': request.data.get('comment')
+                'comment': request.data.get('comment'),
+                'pros': request.data.get('pros', ''),
+                'cons': request.data.get('cons', '')
             }, context={
                 'request': request,
                 'product': product,

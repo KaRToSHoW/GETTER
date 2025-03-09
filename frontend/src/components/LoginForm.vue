@@ -1,5 +1,6 @@
 <template>
     <div class="login-container">
+        <ToastNotification ref="toast" />
         <div class="login-left">
             <div class="login-logo">
                 <img src="https://via.placeholder.com/80" alt="Getter Logo" class="logo-image" />
@@ -18,7 +19,6 @@
         <div class="divider"></div>
         <div class="login-right">
             <h3 class="login-title">Вход в аккаунт</h3>
-
             <form @submit.prevent="handleLogin" class="login-form">
                 <div class="form-group">
                     <label for="username">Почта:</label>
@@ -46,11 +46,13 @@
 import { ref, inject } from 'vue';
 import axios from 'axios';
 import { useRouter } from 'vue-router';
+import ToastNotification from './ToastNotification.vue';
 
 const username = ref('');
 const password = ref('');
 const isAuthenticated = inject('isAuthenticated');
 const router = useRouter();
+const toast = ref(null);
 
 const handleLogin = async () => {
     try {
@@ -59,12 +61,14 @@ const handleLogin = async () => {
             password: password.value
         });
         localStorage.setItem('token', response.data.access);
+        localStorage.setItem('refresh_token', response.data.refresh);
+        localStorage.setItem('username', username.value);
         isAuthenticated.value = true; // Обновляем состояние авторизации
-        alert('Успешный вход!');
+        toast.value.showToast('Успешный вход в систему!', 'success');
         router.push('/profile'); // Перенаправление на профиль
     } catch (error) {
-        console.error('Ошибка при входе:', error);
-        alert('Неверные данные для входа');
+        console.error('Ошибка входа:', error.response ? error.response.data : error.message);
+        toast.value.showToast('Ошибка входа: Неверное имя пользователя или пароль', 'error');
     }
 };
 </script>

@@ -1,13 +1,9 @@
 <template>
     <div class="home-container">
+        <ToastNotification ref="toast" />
         <!-- Карусель с акцией -->
-        <swiper
-            :modules="modules"
-            :pagination="{ clickable: true }"
-            class="swiper-container"
-            @swiper="onSwiper"
-            @slideChange="onSlideChange"
-        >
+        <swiper :modules="modules" :pagination="{ clickable: true }" class="swiper-container" @swiper="onSwiper"
+            @slideChange="onSlideChange">
             <swiper-slide>
                 <div class="promo-banner">
                     <button class="nav-arrow left-arrow"></button>
@@ -49,11 +45,8 @@
             <div v-for="category in categories" :key="category.id" class="category-card">
                 <router-link :to="`/category/${category.id}`" class="category-link">
                     <div class="category-image-wrapper">
-                        <img 
-                            :src="category.image || defaultCategoryImage" 
-                            :alt="`Category ${category.name}`" 
-                            class="category-image" 
-                        />
+                        <img :src="category.image || defaultCategoryImage" :alt="`Category ${category.name}`"
+                            class="category-image" />
                     </div>
                     <h3 class="category-name">{{ category.name }}</h3>
                 </router-link>
@@ -61,7 +54,7 @@
             <p v-if="categories.length === 0" class="no-data">Нет доступных категорий.</p>
         </div>
 
-        <h2 class="home-title">Акции</h2>
+        <h2 class="home-title">Различные товары</h2>
         <div class="products-grid">
             <div v-for="product in products" :key="product.id" class="product-card">
                 <router-link :to="`/product/${product.id}`" class="product-link">
@@ -81,10 +74,13 @@
                         <span class="stock">Осталось: {{ product.stock }} шт.</span>
                     </div>
                     <div v-if="product.specifications" class="specifications">
-                        <div v-for="(value, key) in product.specifications" :key="key" class="spec-item">
-                            <span class="spec-key">{{ key }}:</span> {{ value }}
-                        </div>
+                        <ul class="specifications-list">
+                            <li v-for="(value, key) in product.specifications.specifications" :key="key" class="spec-item">
+                                <strong>{{ key.replace(/_/g, ' ') }}:</strong> {{ value }}
+                            </li>
+                        </ul>
                     </div>
+
                 </div>
                 <div class="button-group">
                     <div v-if="cartItems[product.id]" class="quantity-controls">
@@ -92,15 +88,12 @@
                         <span class="quantity">{{ cartItems[product.id] }}</span>
                         <button @click="increaseQuantity(product)" class="quantity-button">+</button>
                     </div>
-                    <button 
-                        v-else 
-                        @click="addToCart(product)" 
-                        class="add-to-cart-button" 
-                        :disabled="!product.is_available"
-                    >
+                    <button v-else @click="addToCart(product)" class="add-to-cart-button"
+                        :disabled="!product.is_available">
                         {{ product.is_available ? 'В корзину' : 'Недоступно' }}
                     </button>
-                    <button :class="['wishlist-button', { 'active': isInWishlist(product.id) }]" @click="toggleWishlist(product)">
+                    <button :class="['wishlist-button', { 'active': isInWishlist(product.id) }]"
+                        @click="toggleWishlist(product)">
                         <span class="heart-icon">❤️</span>
                     </button>
                 </div>
@@ -119,6 +112,7 @@ import 'swiper/css';
 import 'swiper/css/pagination';
 import defaultImage from '@/assets/img/Default_product_foto.jpg';
 import defaultCategoryImage from '@/assets/img/Default_product_foto.jpg'; // Добавляем дефолтное изображение для категорий
+import ToastNotification from './ToastNotification.vue';
 
 const API_BASE_URL = 'http://127.0.0.1:8000';
 
@@ -128,6 +122,7 @@ const wishlist = ref([]);
 const cartItems = ref({});
 const modules = ref([Pagination]);
 const swiperInstance = ref(null);
+const toast = ref(null);
 
 onMounted(async () => {
     try {
@@ -157,7 +152,7 @@ onMounted(async () => {
         }
     } catch (error) {
         console.error('Ошибка загрузки данных:', error.response ? error.response.data : error.message);
-        alert('Ошибка при загрузке данных. Проверьте консоль.');
+        toast.value.showToast('Ошибка при загрузке данных. Проверьте консоль.', 'error');
     }
 });
 
@@ -176,7 +171,7 @@ const isInWishlist = computed(() => (productId) => {
 const toggleWishlist = async (product) => {
     const token = localStorage.getItem('token');
     if (!token) {
-        alert('Пожалуйста, войдите в систему для добавления в желаемое.');
+        toast.value.showToast('Пожалуйста, войдите в систему для добавления в желаемое.', 'warning');
         return;
     }
 
@@ -186,7 +181,7 @@ const toggleWishlist = async (product) => {
                 headers: { Authorization: `Bearer ${token}` }
             });
             wishlist.value = wishlist.value.filter(id => id !== product.id);
-            alert('Товар удален из желаемого');
+            toast.value.showToast('Товар удален из желаемого', 'success');
         } else {
             await axios.post(`${API_BASE_URL}/main/wishlist/add/`, {
                 product_id: product.id
@@ -194,23 +189,23 @@ const toggleWishlist = async (product) => {
                 headers: { Authorization: `Bearer ${token}` }
             });
             wishlist.value.push(product.id);
-            alert('Товар добавлен в желаемое');
+            toast.value.showToast('Товар добавлен в желаемое', 'success');
         }
     } catch (error) {
         console.error('Ошибка управления желаемым:', error.response ? error.response.data : error.message);
-        alert('Ошибка при управлении желаемым: ' + (error.response ? error.response.data.error : error.message));
+        toast.value.showToast('Ошибка при управлении желаемым: ' + (error.response ? error.response.data.error : error.message), 'error');
     }
 };
 
 const addToCart = async (product) => {
     const token = localStorage.getItem('token');
     if (!token) {
-        alert('Пожалуйста, войдите в систему для добавления в корзину.');
+        toast.value.showToast('Пожалуйста, войдите в систему для добавления в корзину.', 'warning');
         return;
     }
 
     if (!product.is_available) {
-        alert('Товар недоступен для добавления в корзину.');
+        toast.value.showToast('Товар недоступен для добавления в корзину.', 'error');
         return;
     }
 
@@ -222,10 +217,10 @@ const addToCart = async (product) => {
             headers: { Authorization: `Bearer ${token}` }
         });
         cartItems.value[product.id] = 1;
-        alert(`Товар "${product.name}" добавлен в корзину!`);
+        toast.value.showToast(`Товар "${product.name}" добавлен в корзину!`, 'success');
     } catch (error) {
         console.error('Ошибка добавления в корзину:', error.response ? error.response.data : error.message);
-        alert('Ошибка при добавлении в корзину.');
+        toast.value.showToast('Ошибка при добавлении в корзину.', 'error');
     }
 };
 
@@ -234,7 +229,7 @@ const increaseQuantity = async (product) => {
     try {
         const newQuantity = (cartItems.value[product.id] || 0) + 1;
         if (newQuantity > product.stock) {
-            alert('Нельзя добавить больше, чем есть в наличии!');
+            toast.value.showToast('Нельзя добавить больше, чем есть в наличии!', 'warning');
             return;
         }
         await axios.post(`${API_BASE_URL}/main/cart/add/`, {
@@ -246,7 +241,7 @@ const increaseQuantity = async (product) => {
         cartItems.value[product.id] = newQuantity;
     } catch (error) {
         console.error('Ошибка увеличения количества:', error.response ? error.response.data : error.message);
-        alert('Ошибка при увеличении количества.');
+        toast.value.showToast('Ошибка при увеличении количества.', 'error');
     }
 };
 
@@ -255,7 +250,15 @@ const decreaseQuantity = async (product) => {
     try {
         const newQuantity = (cartItems.value[product.id] || 0) - 1;
         if (newQuantity <= 0) {
-            await axios.delete(`${API_BASE_URL}/main/cart/remove/${product.id}/`, {
+            // Получаем ID элемента корзины из текущего заказа
+            const cartResponse = await axios.get(`${API_BASE_URL}/main/cart/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const cartItem = cartResponse.data.items.find(item => item.product.id === product.id);
+            if (!cartItem) {
+                throw new Error('Товар не найден в корзине');
+            }
+            await axios.delete(`${API_BASE_URL}/main/cart/remove/${cartItem.id}/`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             delete cartItems.value[product.id];
@@ -270,7 +273,7 @@ const decreaseQuantity = async (product) => {
         }
     } catch (error) {
         console.error('Ошибка уменьшения количества:', error.response ? error.response.data : error.message);
-        alert('Ошибка при уменьшении количества.');
+        toast.value.showToast('Ошибка при уменьшении количества.', 'error');
     }
 };
 </script>
