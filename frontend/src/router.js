@@ -6,6 +6,7 @@ import HomePage from './components/HomePage.vue'
 import CartPage from './components/CartPage.vue'
 import CategoryPage from './components/CategoryPage.vue'
 import ProductPage from './components/ProductPage.vue'
+import FavoritesPage from './components/FavoritesPage.vue'
 
 const routes = [
     { path: '/login', component: LoginForm },
@@ -15,6 +16,7 @@ const routes = [
     { path: '/cart', name: 'cart', component: CartPage},
     { path: '/category/:id', name: 'CategoryPage', component: CategoryPage, props: true },
     { path: '/product/:id', name: 'ProductPage', component: ProductPage, props: true },
+    { path: '/favorites', name: 'favorites', component: FavoritesPage },
 ]
 
 const router = createRouter({

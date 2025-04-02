@@ -209,3 +209,73 @@ def remove_from_cart(request, item_id):
         return Response({'error': 'Позиция не найдена'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_favorites(request):
+    """Получение всех избранных товаров пользователя"""
+    wishlist_items = Wishlist.objects.filter(user=request.user).select_related('product')
+    products = [item.product for item in wishlist_items]
+    
+    # Аннотируем средний рейтинг
+    product_ids = [product.id for product in products]
+    products_with_rating = Product.objects.filter(id__in=product_ids).annotate(
+        average_rating=Avg('reviews__rating'),
+        reviews_count=Count('reviews')
+    )
+    
+    # Создаем словарь для быстрого доступа к продуктам с рейтингом
+    products_dict = {product.id: product for product in products_with_rating}
+    
+    # Заменяем продукты на аннотированные версии
+    products_with_data = [products_dict.get(product.id, product) for product in products]
+    
+    serializer = ProductSerializer(products_with_data, many=True, context={'request': request})
+    return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def user_orders(request):
+    """Получение всех заказов пользователя"""
+    # Используем related_name="orders" из модели Order для доступа к заказам пользователя
+    user_orders = request.user.orders.all().order_by('-created_at')
+    
+    # Группируем заказы по статусу
+    pending_orders = user_orders.filter(status='pending')
+    completed_orders = user_orders.filter(status__in=['delivered', 'shipped'])
+    canceled_orders = user_orders.filter(status='canceled')
+    
+    # Вычисляем общую сумму всех заказов
+    total_spent = user_orders.exclude(status='canceled').aggregate(Sum('total_price'))['total_price__sum'] or 0
+    
+    # Сериализуем каждую группу заказов
+    pending_serializer = OrderSerializer(pending_orders, many=True, context={'request': request})
+    completed_serializer = OrderSerializer(completed_orders, many=True, context={'request': request})
+    canceled_serializer = OrderSerializer(canceled_orders, many=True, context={'request': request})
+    
+    return Response({
+        'pending_orders': pending_serializer.data,
+        'completed_orders': completed_serializer.data,
+        'canceled_orders': canceled_serializer.data,
+        'total_spent': float(total_spent)
+    })
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def popular_wishlist_products(request):
+    """Получение популярных товаров из списков желаемого"""
+    # Используем related_name="wishlisted_by" из модели Wishlist для определения популярных товаров
+    popular_products = Product.objects.annotate(
+        wishlist_count=Count('wishlisted_by')
+    ).filter(
+        wishlist_count__gt=0  # Только товары, добавленные хотя бы в один wishlist
+    ).order_by('-wishlist_count')[:10]
+    
+    # Добавляем информацию о рейтинге
+    popular_products = popular_products.annotate(
+        average_rating=Avg('reviews__rating'),
+        reviews_count=Count('reviews')
+    )
+    
+    serializer = ProductSerializer(popular_products, many=True, context={'request': request})
+    return Response(serializer.data)

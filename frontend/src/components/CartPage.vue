@@ -13,7 +13,7 @@
                     <h3>{{ item.product.name }}</h3>
                     <p class="cart-item-sku">Артикул: {{ item.product.sku }}</p>
                     <p class="cart-item-category">Категория: {{ item.product.category.name }}</p>
-                    <div v-if="item.product.specifications.specifications" class="cart-item-specifications">
+                    <div v-if="item.product.specifications && item.product.specifications.specifications" class="cart-item-specifications">
                         <span v-for="(value, key) in item.product.specifications.specifications" :key="key" class="spec-item">
                             <strong>{{ key.replace(/_/g, ' ') }}:</strong> {{ value }}
                         </span>
