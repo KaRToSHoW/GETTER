@@ -17,6 +17,7 @@
                                 <li v-if="!isAuthenticated"><router-link to="/login">Войти</router-link></li>
                                 <li v-if="!isAuthenticated"><router-link to="/register">Регистрация</router-link></li>
                                 <li v-if="isAuthenticated"><router-link to="/profile">Профиль</router-link></li>
+                                <li v-if="isAuthenticated"><router-link to="/favorites">Понравившиеся товары</router-link></li>
                                 <li v-if="isAuthenticated"><a href="#" @click.prevent="logout">Выйти</a></li>
                             </ul>
                         </div>
@@ -131,6 +132,8 @@ nav ul li a:hover {
 }
 
 .profile-dropdown .dropdown-menu ul {
+    display: flex;
+    flex-direction: column;
     list-style: none;
     padding: 5px 0;
     margin: 0;

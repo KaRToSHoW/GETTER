@@ -23,8 +23,11 @@
                         <p><strong>Имя пользователя:</strong> {{ user.username }}</p>
                         <p><strong>Электронная почта:</strong> {{ user.email }}</p>
                     </div>
-                    <button @click="startEditing" class="edit-button">Редактировать</button>
-                    <button @click="logout" class="logout-button">Выйти</button>
+                    <div class="button-group">
+                        <button @click="startEditing" class="edit-button">Редактировать</button>
+                        <button @click="goToFavorites" class="favorites-button">Понравившиеся товары</button>
+                        <button @click="logout" class="logout-button">Выйти</button>
+                    </div>
                 </div>
                 <form v-else @submit.prevent="updateProfile" class="profile-form">
                     <div class="profile-image-section">
@@ -94,6 +97,7 @@ onMounted(async () => {
 
 const goToLogin = () => router.push('/login');
 const goToRegister = () => router.push('/register');
+const goToFavorites = () => router.push('/favorites');
 
 const startEditing = () => {
     isEditing.value = true;
@@ -284,6 +288,13 @@ const removeImage = async () => {
     margin: 5px 0;
 }
 
+.button-group {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 10px;
+}
+
 .profile-form {
     display: flex;
     flex-direction: column;
@@ -324,6 +335,21 @@ const removeImage = async () => {
 
 .edit-button:hover {
     background-color: #0056b3;
+}
+
+.favorites-button {
+    background-color: #f0ad4e;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+    width: 100%;
+}
+
+.favorites-button:hover {
+    background-color: #ec971f;
 }
 
 .save-button {

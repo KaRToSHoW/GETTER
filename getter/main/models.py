@@ -5,7 +5,7 @@ from django.urls import reverse
 
 class Category(models.Model):
     name = models.CharField(max_length=255, unique=True, verbose_name="Категория")
-    image = models.ImageField(upload_to='category_images/', blank=True, null=True, verbose_name="Изображение")  # Новое поле
+    image = models.ImageField(upload_to='category_images/', blank=True, null=True, verbose_name="Изображение")
 
     class Meta:
         verbose_name = "Категория"
@@ -27,6 +27,7 @@ class Product(models.Model):
     image = models.ImageField(upload_to='product_images/', blank=True, null=True, verbose_name="Картинка товара")
     is_available = models.BooleanField(default=True, verbose_name="В наличии")
     specifications = models.JSONField(blank=True, null=True, verbose_name="Характеристики")
+    creation_date = models.DateTimeField(default=timezone.now, verbose_name="Дата поступления")
 
     class Meta:
         verbose_name = "Продукт"
@@ -38,6 +39,22 @@ class Product(models.Model):
     def get_absolute_url(self):
         return reverse('product-detail', kwargs={'pk': self.pk})
     
+    def get_discount(self):
+        """Расчет скидки в зависимости от срока хранения товара"""
+        days_in_stock = (timezone.now() - self.creation_date).days
+        
+        if days_in_stock > 180:  # Более 6 месяцев
+            return 0.25  # 25% скидка
+        elif days_in_stock > 90:  # Более 3 месяцев
+            return 0.15  # 15% скидка
+        elif days_in_stock > 30:  # Более месяца
+            return 0.05  # 5% скидка
+        return 0  # Без скидки для новых товаров
+        
+    def get_discounted_price(self):
+        discount = self.get_discount()
+        return self.price * (1 - discount)
+
 class OrderManager(models.Manager):
     def pending(self):
         return self.filter(status='pending')
@@ -57,12 +74,12 @@ class Order(models.Model):
     ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="orders", verbose_name="Пользователь")
-    products = models.ManyToManyField(Product, through='OrderItem', related_name="orders")  # ManyToMany с through
+    products = models.ManyToManyField(Product, through='OrderItem', related_name="orders")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending', verbose_name="Статус")
     total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     created_at = models.DateTimeField(default=timezone.now, verbose_name="Создан")
     updated_at = models.DateTimeField(auto_now=True)
-    order_number = models.CharField(max_length=20, unique=True, blank=True, null=True, verbose_name="Номер заказа")  # Новое поле для номера заказа
+    order_number = models.CharField(max_length=20, unique=True, blank=True, null=True, verbose_name="Номер заказа")  
 
     class Meta:
         ordering = ['-created_at']
@@ -73,7 +90,7 @@ class Order(models.Model):
         return sum(item.price for item in self.items.all())
 
     def save(self, *args, **kwargs):
-        # Генерация номера заказа, если его нет
+        # Генерация номера заказа
         if not self.order_number:
             self.order_number = f"ORDER{self.id:05d}" 
         if self.pk:
@@ -85,6 +102,22 @@ class Order(models.Model):
     
     def get_absolute_url(self):
         return reverse('order_detail', kwargs={'pk': self.pk})
+
+    def update_status_by_time(self):
+        """Обновляет статус заказа в зависимости от времени"""
+        if self.status == 'pending':
+            # Если заказ в ожидании более 2 дней и не обработан
+            if (timezone.now() - self.created_at).days > 2:
+                self.status = 'canceled'
+                self.save()
+                return True
+        elif self.status == 'shipped':
+            # Если заказ отправлен более 7 дней назад, считаем доставленным
+            if (timezone.now() - self.updated_at).days > 7:
+                self.status = 'delivered'
+                self.save()
+                return True
+        return False
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items", verbose_name="Заказ")
