@@ -58,6 +58,7 @@ const error = ref(null);
 const router = useRouter();
 const isAuthenticated = inject('isAuthenticated');
 const showToast = inject('showToast', null);
+const currentUser = ref(null);
 
 onMounted(() => {
     if (!isAuthenticated.value) {
@@ -67,8 +68,27 @@ onMounted(() => {
         }
         return;
     }
+    loadCurrentUser();
     fetchFavorites();
 });
+
+const loadCurrentUser = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        if (token) {
+            const response = await axios.get(`${$apiBaseUrl}/users/profile/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            currentUser.value = response.data;
+            console.log('Текущий пользователь:', currentUser.value);
+        }
+    } catch (err) {
+        console.error('Ошибка при загрузке данных пользователя:', err);
+        if (showToast) {
+            showToast('Ошибка при загрузке данных пользователя', 'error');
+        }
+    }
+};
 
 const fetchFavorites = async () => {
     try {

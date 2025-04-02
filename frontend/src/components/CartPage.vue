@@ -62,6 +62,23 @@ const cart = ref({ items: [], total_price: 0 });
 const selectedItems = ref([]);
 const wishlist = ref([]);
 const toast = ref(null);
+const currentUser = ref(null);
+
+const loadCurrentUser = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        if (token) {
+            const response = await axios.get(`${$apiBaseUrl}/users/profile/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            currentUser.value = response.data;
+            console.log('Текущий пользователь:', currentUser.value);
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки профиля:', error);
+        toast.value.showToast('Ошибка при загрузке данных пользователя', 'error');
+    }
+};
 
 const loadCartData = async () => {
     try {
@@ -76,11 +93,19 @@ const loadCartData = async () => {
                 })
             ]);
 
-            cart.value = {
+            // Создаем копию данных ответа
+            const cartData = {
                 ...cartResponse.data,
                 total_price: typeof cartResponse.data.total_price === 'number' ? cartResponse.data.total_price : parseFloat(cartResponse.data.total_price) || 0,
                 items: cartResponse.data.items || []
             };
+            
+            // Сохраняем оригинальное количество для каждого элемента
+            cartData.items.forEach(item => {
+                item._originalQuantity = item.quantity;
+            });
+            
+            cart.value = cartData;
             wishlist.value = wishlistResponse.data.wishlist || [];
         }
     } catch (error) {
@@ -90,6 +115,7 @@ const loadCartData = async () => {
 };
 
 onMounted(async () => {
+    await loadCurrentUser();
     await loadCartData();
 });
 
@@ -106,7 +132,9 @@ const decreaseQuantity = (item) => {
 const updateQuantity = async (item, change) => {
     try {
         const token = localStorage.getItem('token');
-        const newQuantity = item.quantity + change;
+        
+        // Если изменение не передано, значит обновляем до текущего значения в поле ввода
+        let newQuantity = change !== undefined ? item.quantity + change : item.quantity;
 
         if (newQuantity <= 0) {
             await removeFromCart(item.id);
@@ -115,12 +143,24 @@ const updateQuantity = async (item, change) => {
 
         if (newQuantity > item.product.stock) {
             toast.value.showToast('Нельзя добавить больше, чем есть в наличии!', 'warning');
+            // Возвращаем старое значение
+            item.quantity = Math.min(item.quantity, item.product.stock);
             return;
         }
 
+        // Проверяем, может ли пользователь редактировать этот элемент корзины
+        if (!canEditCartItem(item)) {
+            toast.value.showToast('У вас нет прав на редактирование этого товара', 'error');
+            await loadCartData(); // Перезагружаем данные корзины
+            return;
+        }
+
+        // Вычисляем разницу для отправки на сервер
+        const quantityDifference = change !== undefined ? change : newQuantity - item._originalQuantity;
+        
         await axios.post(`${$apiBaseUrl}/main/cart/add/`, {
             product_id: item.product.id,
-            quantity: change
+            quantity: quantityDifference
         }, {
             headers: { Authorization: `Bearer ${token}` }
         });
@@ -132,9 +172,43 @@ const updateQuantity = async (item, change) => {
     }
 };
 
+// Проверка прав на редактирование элемента корзины
+const canEditCartItem = (item) => {
+    if (!currentUser.value) return false;
+    
+    // Админ может редактировать любые элементы
+    if (currentUser.value.is_superuser) return true;
+    
+    // Обычный пользователь может редактировать только свои элементы
+    return item.user_id === currentUser.value.id;
+};
+
+// Проверка прав на удаление из корзины
+const canDeleteFromCart = (item) => {
+    if (!currentUser.value) return false;
+    
+    // Админ может удалять любые товары
+    if (currentUser.value.is_superuser) return true;
+    
+    // Обычный пользователь может удалять только свои товары
+    return item.user_id === currentUser.value.id;
+};
+
 const removeFromCart = async (itemId) => {
     try {
         const token = localStorage.getItem('token');
+        const item = cart.value.items.find(item => item.id === itemId);
+        
+        if (!item) {
+            toast.value.showToast('Товар не найден', 'error');
+            return;
+        }
+        
+        if (!canDeleteFromCart(item)) {
+            toast.value.showToast('У вас нет прав на удаление этого товара', 'error');
+            return;
+        }
+        
         await axios.delete(`${$apiBaseUrl}/main/cart/remove/${itemId}/`, {
             headers: { Authorization: `Bearer ${token}` }
         });

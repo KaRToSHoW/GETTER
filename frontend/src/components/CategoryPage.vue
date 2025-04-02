@@ -1,8 +1,22 @@
 <template>
     <div class="category-container">
         <h2 class="category-title">{{ categoryName }}</h2>
+        
+        <!-- Административная панель -->
+        <div v-if="currentUser && currentUser.is_superuser" class="admin-actions">
+            <button @click="createNewProduct" class="admin-button">Добавить товар в категорию</button>
+        </div>
+        
         <div class="products-grid">
             <div v-for="product in categoryProducts" :key="product.id" class="product-card">
+                <!-- Кнопка удаления для администратора -->
+                <button v-if="currentUser && currentUser.is_superuser" 
+                       @click="deleteProduct(product.id)" 
+                       class="admin-delete-btn">✖</button>
+                <!-- Кнопка редактирования для администратора -->
+                <button v-if="currentUser && currentUser.is_superuser" 
+                       @click="editProduct(product)" 
+                       class="admin-edit-btn">✎</button>
                 <router-link :to="`/product/${product.id}`" class="product-link">
                     <div class="image-wrapper">
                         <img :src="product.image || defaultImage" class="product-image" />
@@ -46,6 +60,50 @@
             </div>
             <p v-if="categoryProducts.length === 0" class="no-data">В этой категории нет товаров.</p>
         </div>
+
+        <!-- Модальное окно для редактирования товара -->
+        <div v-if="editingProduct" class="edit-product-modal">
+            <div class="edit-product-content">
+                <h3>Редактирование товара</h3>
+                <form @submit.prevent="saveEditedProduct" class="edit-product-form">
+                    <div class="form-group">
+                        <label>Название товара:</label>
+                        <input v-model="editingProduct.name" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Цена:</label>
+                        <input v-model.number="editingProduct.price" type="number" min="0" step="0.01" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Количество на складе:</label>
+                        <input v-model.number="editingProduct.stock" type="number" min="0" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Артикул:</label>
+                        <input v-model="editingProduct.sku" />
+                    </div>
+                    <div class="form-group">
+                        <label>Доступность:</label>
+                        <select v-model="editingProduct.is_available">
+                            <option :value="true">Доступен</option>
+                            <option :value="false">Недоступен</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Категория:</label>
+                        <select v-model="editingProduct.category.id">
+                            <option v-for="category in categories" :key="category.id" :value="category.id">
+                                {{ category.name }}
+                            </option>
+                        </select>
+                    </div>
+                    <div class="form-buttons">
+                        <button type="button" @click="cancelEditProduct" class="cancel-button">Отмена</button>
+                        <button type="submit" class="save-button">Сохранить</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -62,8 +120,33 @@ const categoryProducts = ref([]);
 const wishlist = ref([]);
 const cartItems = ref({});
 const categoryName = ref('');
+const currentUser = ref(null);
+const editingProduct = ref(null);
+const categories = ref([]);
 
 onMounted(async () => {
+    await loadCurrentUser();
+    await loadCategoryData();
+    if (currentUser.value && currentUser.value.is_superuser) {
+        await loadCategories();
+    }
+});
+
+const loadCurrentUser = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        if (token) {
+            const response = await axios.get(`${API_BASE_URL}/users/profile/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            currentUser.value = response.data;
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки профиля пользователя:', error);
+    }
+};
+
+const loadCategoryData = async () => {
     try {
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -96,7 +179,41 @@ onMounted(async () => {
         console.error('Ошибка загрузки товаров категории:', error.response ? error.response.data : error.message);
         alert('Ошибка при загрузке товаров категории. Проверьте консоль.');
     }
-});
+};
+
+// Функции администратора
+const createNewProduct = () => {
+    if (!currentUser.value || !currentUser.value.is_superuser) {
+        alert('У вас нет прав для создания товаров');
+        return;
+    }
+    
+    // Здесь должна быть реализация формы создания или переход на страницу создания
+    alert('Функция создания товара находится в разработке');
+};
+
+const deleteProduct = async (productId) => {
+    if (!currentUser.value || !currentUser.value.is_superuser) {
+        alert('У вас нет прав для удаления товаров');
+        return;
+    }
+    
+    if (confirm('Вы уверены, что хотите удалить этот товар?')) {
+        try {
+            const token = localStorage.getItem('token');
+            await axios.delete(`${API_BASE_URL}/main/products/${productId}/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            alert('Товар успешно удален');
+            // Обновляем список товаров после удаления
+            loadCategoryData();
+        } catch (error) {
+            console.error('Ошибка удаления товара:', error);
+            alert('Ошибка при удалении товара. ' + (error.response?.data?.detail || error.message));
+        }
+    }
+};
 
 const isInWishlist = computed(() => (productId) => {
     return wishlist.value.includes(productId);
@@ -202,6 +319,51 @@ const decreaseQuantity = async (product) => {
         alert('Ошибка при уменьшении количества.');
     }
 };
+
+// Функция для загрузки категорий
+const loadCategories = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const response = await axios.get(`${API_BASE_URL}/main/categories/`, { headers });
+        categories.value = response.data;
+    } catch (error) {
+        console.error('Ошибка загрузки категорий:', error);
+    }
+};
+
+// Функция начала редактирования товара
+const editProduct = (product) => {
+    // Создаем копию товара для редактирования
+    editingProduct.value = JSON.parse(JSON.stringify(product));
+};
+
+// Функция отмены редактирования
+const cancelEditProduct = () => {
+    editingProduct.value = null;
+};
+
+// Функция сохранения отредактированного товара
+const saveEditedProduct = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        const response = await axios.put(`${API_BASE_URL}/main/products/${editingProduct.value.id}/`, editingProduct.value, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        console.log('Ответ сервера:', response.data);
+        
+        // Обновляем товар в списке
+        await loadCategoryData();
+        
+        // Закрываем модальное окно
+        editingProduct.value = null;
+        alert('Товар успешно обновлен');
+    } catch (error) {
+        console.error('Ошибка обновления товара:', error);
+        alert('Ошибка при обновлении товара. ' + (error.response?.data?.detail || error.message));
+    }
+};
 </script>
 
 <style scoped>
@@ -232,14 +394,13 @@ const decreaseQuantity = async (product) => {
 
 .product-card {
     background: #fff;
-    border-radius: 16px;
-    overflow: hidden;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border-radius: 8px;
+    padding: 20px;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    padding: 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s;
+    position: relative;
 }
 
 .product-card:hover {
@@ -453,5 +614,136 @@ const decreaseQuantity = async (product) => {
     background: #fff;
     border-radius: 12px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.admin-delete-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background-color: #ff4d4d;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 5;
+}
+
+.admin-delete-btn:hover {
+    background-color: #ff0000;
+}
+
+.admin-actions {
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.admin-button {
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.admin-button:hover {
+    background-color: #45a049;
+}
+
+.admin-edit-btn {
+    position: absolute;
+    top: 10px;
+    right: 40px;
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 5;
+}
+
+.admin-edit-btn:hover {
+    background-color: #45a049;
+}
+
+/* Стили для модального окна редактирования */
+.edit-product-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.edit-product-content {
+    background-color: white;
+    padding: 30px;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 600px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.edit-product-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.form-group label {
+    font-weight: bold;
+}
+
+.form-group input, .form-group select {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.form-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.cancel-button, .save-button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.cancel-button {
+    background-color: #f44336;
+    color: white;
+}
+
+.save-button {
+    background-color: #4caf50;
+    color: white;
 }
 </style>

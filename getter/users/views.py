@@ -40,14 +40,8 @@ def profile(request):
     user = request.user
 
     if request.method == 'GET':
-        profile_data = {
-            'username': user.username,
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-            'email': user.email,
-            'profile_image': user.get_profile_image_url() if user.profile_image else None,
-        }
-        return Response(profile_data)
+        serializer = UserSerializer(user)
+        return Response(serializer.data)
 
     elif request.method == 'PUT':
         serializer = UserSerializer(user, data=request.data, partial=True)

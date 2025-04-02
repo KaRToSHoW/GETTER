@@ -5,6 +5,11 @@
         <div class="product-header">
             <button @click="goBack" class="back-button">Назад</button>
             <h2 class="product-title">{{ product.name }}</h2>
+            <div v-if="currentUser && currentUser.is_superuser" class="admin-panel">
+                <span class="admin-badge">Администратор</span>
+                <button @click="editProduct" class="admin-button edit">Редактировать</button>
+                <button @click="deleteProduct" class="admin-button delete">Удалить</button>
+            </div>
         </div>
         <div class="product-content">
             <div class="product-image-wrapper">
@@ -107,6 +112,20 @@
                             <div class="user-name">{{ review.user.username }}</div>
                             <div class="review-date">{{ formatDate(review.created_at) }}</div>
                         </div>
+                        <button 
+                            v-if="canDeleteReview(review)" 
+                            @click="deleteReview(review.id)" 
+                            class="delete-review-button"
+                        >
+                            ✖
+                        </button>
+                        <button 
+                            v-if="canEditReview(review)" 
+                            @click="startEditReview(review)" 
+                            class="edit-review-button"
+                        >
+                            ✎
+                        </button>
                     </div>
                     <div class="review-rating">
                         <div class="stars">
@@ -127,6 +146,70 @@
                 </div>
             </div>
             <p v-else class="no-reviews">{{ selectedRating ? 'Нет отзывов с такой оценкой' : 'Пока нет отзывов' }}</p>
+        </div>
+        
+        <!-- Модальное окно для редактирования отзыва -->
+        <div v-if="editingReview" class="edit-review-modal">
+            <div class="edit-review-content">
+                <h3>Редактирование отзыва</h3>
+                <div class="rating-input">
+                    <span v-for="i in 5" :key="i" :class="['star', i <= editingReview.rating ? 'filled' : '']"
+                        @click="editingReview.rating = i">★</span>
+                </div>
+                <textarea v-model="editingReview.comment" placeholder="Ваш отзыв..." class="review-textarea"></textarea>
+                <div class="review-fields">
+                    <input v-model="editingReview.pros" placeholder="Плюсы" class="review-input" />
+                    <input v-model="editingReview.cons" placeholder="Минусы" class="review-input" />
+                </div>
+                <div class="modal-buttons">
+                    <button @click="cancelEditReview" class="cancel-button">Отмена</button>
+                    <button @click="saveEditedReview" class="save-button">Сохранить</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Модальное окно для редактирования товара -->
+        <div v-if="editingProduct" class="edit-product-modal">
+            <div class="edit-product-content">
+                <h3>Редактирование товара</h3>
+                <form @submit.prevent="saveEditedProduct" class="edit-product-form">
+                    <div class="form-group">
+                        <label>Название товара:</label>
+                        <input v-model="editingProduct.name" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Цена:</label>
+                        <input v-model.number="editingProduct.price" type="number" min="0" step="0.01" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Количество на складе:</label>
+                        <input v-model.number="editingProduct.stock" type="number" min="0" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Артикул:</label>
+                        <input v-model="editingProduct.sku" />
+                    </div>
+                    <div class="form-group">
+                        <label>Доступность:</label>
+                        <select v-model="editingProduct.is_available">
+                            <option :value="true">Доступен</option>
+                            <option :value="false">Недоступен</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Категория:</label>
+                        <select v-model="editingProduct.category.id">
+                            <option v-for="category in categories" :key="category.id" :value="category.id">
+                                {{ category.name }}
+                            </option>
+                        </select>
+                    </div>
+                    <div class="form-buttons">
+                        <button type="button" @click="cancelEditProduct" class="cancel-button">Отмена</button>
+                        <button type="submit" class="save-button">Сохранить</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
     <div v-else class="loading">Загрузка...</div>
@@ -154,9 +237,17 @@ const reviewPros = ref('');
 const reviewCons = ref('');
 const sortBy = ref('date-new');
 const selectedRating = ref(null);
+const currentUser = ref(null);
+const editingReview = ref(null);
+const editingProduct = ref(null);
+const categories = ref([]);
 
 onMounted(async () => {
+    await loadCurrentUser();
     await loadProductData();
+    if (currentUser.value && currentUser.value.is_superuser) {
+        await loadCategories();
+    }
 });
 
 const loadProductData = async () => {
@@ -390,6 +481,203 @@ const submitReview = async () => {
     } catch (error) {
         console.error('Ошибка отправки отзыва:', error.response ? error.response.data : error.message);
         toast.value.showToast('Ошибка при отправке отзыва: ' + (error.response ? JSON.stringify(error.response.data) : error.message), 'error');
+    }
+};
+
+// Загрузка информации о текущем пользователе
+const loadCurrentUser = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        if (token) {
+            const response = await axios.get(`${API_BASE_URL}/users/profile/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            currentUser.value = response.data;
+            console.log('Текущий пользователь:', currentUser.value);
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки профиля:', error);
+    }
+};
+
+// Функция для проверки прав на удаление отзыва
+const canDeleteReview = (review) => {
+    if (!currentUser.value) return false;
+    
+    // Админ может удалять любые отзывы
+    if (currentUser.value.is_superuser) return true;
+    
+    // Обычный пользователь может удалять только свои отзывы
+    return review.user.id === currentUser.value.id;
+};
+
+// Функция для удаления отзыва
+const deleteReview = async (reviewId) => {
+    // Добавляем предупреждение перед удалением
+    if (!confirm('Вы действительно хотите удалить этот отзыв?')) {
+        return;
+    }
+    
+    try {
+        // Находим отзыв в списке
+        const review = reviews.value.find(r => r.id === reviewId);
+        if (!review) {
+            toast.value.showToast('Отзыв не найден', 'error');
+            return;
+        }
+        
+        // Проверяем права доступа
+        if (!canDeleteReview(review)) {
+            toast.value.showToast('У вас нет прав на удаление этого отзыва', 'error');
+            return;
+        }
+        
+        const token = localStorage.getItem('token');
+        
+        // Отправляем запрос на удаление отзыва на сервер
+        await axios.post(`${API_BASE_URL}/main/products/${route.params.id}/reviews/`, {
+            action: 'delete',
+            review_id: reviewId
+        }, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        // Удаляем отзыв из списка после успешного запроса
+        reviews.value = reviews.value.filter(review => review.id !== reviewId);
+        toast.value.showToast('Отзыв успешно удален', 'success');
+        
+    } catch (error) {
+        console.error('Ошибка удаления отзыва:', error);
+        
+        if (error.response) {
+            // Если сервер вернул ошибку, показываем сообщение от сервера
+            const errorMessage = error.response.data.error || 'Ошибка при удалении отзыва';
+            toast.value.showToast(errorMessage, 'error');
+        } else {
+            toast.value.showToast('Ошибка при удалении отзыва: ' + error.message, 'error');
+        }
+    }
+};
+
+// Функция для редактирования товара (только для администраторов)
+const editProduct = () => {
+    if (!currentUser.value || !currentUser.value.is_superuser) {
+        toast.value.showToast('У вас нет прав для редактирования товаров', 'error');
+        return;
+    }
+    
+    // Создаем копию товара и открываем модальное окно редактирования
+    editingProduct.value = JSON.parse(JSON.stringify(product.value));
+};
+
+// Функция для удаления товара (только для администраторов)
+const deleteProduct = async () => {
+    if (!currentUser.value || !currentUser.value.is_superuser) {
+        toast.value.showToast('У вас нет прав для удаления товаров', 'error');
+        return;
+    }
+    
+    if (confirm('Вы уверены, что хотите удалить этот товар?')) {
+        try {
+            const token = localStorage.getItem('token');
+            await axios.delete(`${API_BASE_URL}/main/products/${route.params.id}/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            
+            toast.value.showToast('Товар успешно удален', 'success');
+            router.push('/home');
+        } catch (error) {
+            console.error('Ошибка удаления товара:', error);
+            toast.value.showToast('Ошибка при удалении товара: ' + (error.response?.data?.detail || error.message), 'error');
+        }
+    }
+};
+
+// Функция для определения, может ли пользователь редактировать отзыв
+const canEditReview = (review) => {
+    if (!currentUser.value) return false;
+    
+    // Пользователь может редактировать только свои отзывы
+    return review.user.id === currentUser.value.id;
+};
+
+// Функция начала редактирования отзыва
+const startEditReview = (review) => {
+    // Создаем копию отзыва для редактирования
+    editingReview.value = { ...review };
+};
+
+// Функция отмены редактирования
+const cancelEditReview = () => {
+    editingReview.value = null;
+};
+
+// Функция сохранения отредактированного отзыва
+const saveEditedReview = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        // Используем метод POST вместо PUT
+        await axios.post(`${API_BASE_URL}/main/products/${route.params.id}/reviews/`, {
+            action: 'update',
+            review_id: editingReview.value.id,
+            rating: editingReview.value.rating,
+            comment: editingReview.value.comment,
+            pros: editingReview.value.pros,
+            cons: editingReview.value.cons
+        }, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        // Обновляем отзыв в списке
+        const index = reviews.value.findIndex(r => r.id === editingReview.value.id);
+        if (index !== -1) {
+            reviews.value[index] = editingReview.value;
+        }
+        
+        // Закрываем модальное окно
+        editingReview.value = null;
+        toast.value.showToast('Отзыв успешно обновлен', 'success');
+    } catch (error) {
+        console.error('Ошибка обновления отзыва:', error);
+        toast.value.showToast('Ошибка при обновлении отзыва: ' + (error.response?.data?.detail || error.message), 'error');
+    }
+};
+
+// Загрузка списка категорий для формы редактирования товара
+const loadCategories = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const response = await axios.get(`${API_BASE_URL}/main/categories/`, { headers });
+        categories.value = response.data;
+    } catch (error) {
+        console.error('Ошибка загрузки категорий:', error);
+        toast.value.showToast('Ошибка при загрузке категорий', 'error');
+    }
+};
+
+// Функция отмены редактирования товара
+const cancelEditProduct = () => {
+    editingProduct.value = null;
+};
+
+// Функция сохранения отредактированного товара
+const saveEditedProduct = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        const response = await axios.put(`${API_BASE_URL}/main/products/${editingProduct.value.id}/`, editingProduct.value, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        // Обновляем данные товара
+        product.value = response.data;
+        
+        // Закрываем модальное окно
+        editingProduct.value = null;
+        toast.value.showToast('Товар успешно обновлен', 'success');
+    } catch (error) {
+        console.error('Ошибка обновления товара:', error);
+        toast.value.showToast('Ошибка при обновлении товара: ' + (error.response?.data?.detail || error.message), 'error');
     }
 };
 </script>
@@ -758,8 +1046,9 @@ const submitReview = async () => {
 
 .review-header {
     display: flex;
-    gap: 12px;
     align-items: center;
+    margin-bottom: 10px;
+    position: relative;
 }
 
 .user-avatar {
@@ -975,6 +1264,28 @@ const submitReview = async () => {
     margin-bottom: 24px;
 }
 
+.delete-review-button {
+    position: absolute;
+    right: 0;
+    top: 0;
+    background-color: #ff4d4d;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.delete-review-button:hover {
+    background-color: #ff0000;
+}
+
 @media (max-width: 1200px) {
     .product-content {
         grid-template-columns: 1fr;
@@ -1028,5 +1339,165 @@ const submitReview = async () => {
         width: 100%;
         justify-content: space-between;
     }
+}
+
+.admin-panel {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+    gap: 10px;
+}
+
+.admin-badge {
+    background-color: #6b46c1;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.admin-button {
+    padding: 5px 10px;
+    border: none;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.admin-button.edit {
+    background-color: #4caf50;
+    color: white;
+}
+
+.admin-button.delete {
+    background-color: #f44336;
+    color: white;
+}
+
+.admin-button:hover {
+    opacity: 0.8;
+}
+
+/* Стили для кнопки редактирования отзыва */
+.edit-review-button {
+    position: absolute;
+    right: 30px;
+    top: 0;
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.edit-review-button:hover {
+    background-color: #45a049;
+}
+
+/* Стили для модального окна редактирования */
+.edit-review-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.edit-review-content {
+    background-color: white;
+    padding: 30px;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 600px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.modal-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.cancel-button, .save-button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.cancel-button {
+    background-color: #f44336;
+    color: white;
+}
+
+.save-button {
+    background-color: #4caf50;
+    color: white;
+}
+
+/* Стили для модального окна редактирования товара */
+.edit-product-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.edit-product-content {
+    background-color: white;
+    padding: 30px;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 600px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.edit-product-form {
+    display: grid;
+    gap: 16px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group label {
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+
+.form-group input {
+    padding: 12px;
+    border: 1px solid #d2d2d7;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+.form-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
 }
 </style>

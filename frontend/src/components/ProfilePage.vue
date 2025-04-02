@@ -22,9 +22,10 @@
                         <p><strong>Имя:</strong> {{ user.first_name }} {{ user.last_name }}</p>
                         <p><strong>Имя пользователя:</strong> {{ user.username }}</p>
                         <p><strong>Электронная почта:</strong> {{ user.email }}</p>
+                        <p v-if="user.is_superuser"><strong>Статус:</strong> Администратор</p>
                     </div>
                     <div class="button-group">
-                        <button @click="startEditing" class="edit-button">Редактировать</button>
+                        <button v-if="canEditProfile()" @click="startEditing" class="edit-button">Редактировать</button>
                         <button @click="goToFavorites" class="favorites-button">Понравившиеся товары</button>
                         <button @click="logout" class="logout-button">Выйти</button>
                     </div>
@@ -80,32 +81,25 @@ const user = ref(null);
 const isEditing = ref(false);
 const router = useRouter();
 const logout = inject('logout');
+const currentUser = ref(null);
 
 onMounted(async () => {
+    await loadCurrentUser();
+    await loadUserProfile();
+});
+
+const loadCurrentUser = async () => {
     try {
         const token = localStorage.getItem('token');
         if (token) {
             const response = await axios.get('http://127.0.0.1:8000/users/profile/', {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            user.value = response.data;
+            currentUser.value = response.data;
         }
     } catch (error) {
-        console.error('Ошибка загрузки профиля:', error);
+        console.error('Ошибка загрузки текущего пользователя:', error);
     }
-});
-
-const goToLogin = () => router.push('/login');
-const goToRegister = () => router.push('/register');
-const goToFavorites = () => router.push('/favorites');
-
-const startEditing = () => {
-    isEditing.value = true;
-};
-
-const cancelEditing = () => {
-    isEditing.value = false;
-    loadUserProfile();
 };
 
 const loadUserProfile = async () => {
@@ -120,6 +114,30 @@ const loadUserProfile = async () => {
     } catch (error) {
         console.error('Ошибка загрузки профиля:', error);
     }
+};
+
+// Проверка прав на редактирование профиля
+const canEditProfile = () => {
+    if (!currentUser.value || !user.value) return false;
+    
+    // Админ может редактировать любые профили
+    if (currentUser.value.is_superuser) return true;
+    
+    // Обычный пользователь может редактировать только свой профиль
+    return user.value.id === currentUser.value.id;
+};
+
+const goToLogin = () => router.push('/login');
+const goToRegister = () => router.push('/register');
+const goToFavorites = () => router.push('/favorites');
+
+const startEditing = () => {
+    isEditing.value = true;
+};
+
+const cancelEditing = () => {
+    isEditing.value = false;
+    loadUserProfile();
 };
 
 const updateProfile = async () => {

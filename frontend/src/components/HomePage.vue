@@ -1,6 +1,15 @@
 <template>
     <div class="home-container">
         <ToastNotification ref="toast" />
+        <!-- Административная панель -->
+        <div v-if="currentUser && currentUser.is_superuser" class="admin-dashboard">
+            <h2 class="admin-title">Панель администратора</h2>
+            <div class="admin-actions">
+                <button @click="createNewProduct" class="admin-button create">Добавить новый товар</button>
+                <button @click="createNewCategory" class="admin-button create">Добавить новую категорию</button>
+                <button @click="manageUsers" class="admin-button manage">Управление пользователями</button>
+            </div>
+        </div>
         <!-- Карусель с акцией -->
         <swiper :modules="modules" :pagination="{ clickable: true }" class="swiper-container" @swiper="onSwiper"
             @slideChange="onSlideChange">
@@ -123,8 +132,29 @@ const cartItems = ref({});
 const modules = ref([Pagination]);
 const swiperInstance = ref(null);
 const toast = ref(null);
+const currentUser = ref(null);
 
 onMounted(async () => {
+    await loadCurrentUser();
+    await loadData();
+});
+
+const loadCurrentUser = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        if (token) {
+            const response = await axios.get(`${API_BASE_URL}/users/profile/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            currentUser.value = response.data;
+            console.log('Текущий пользователь:', currentUser.value);
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки профиля пользователя:', error);
+    }
+};
+
+const loadData = async () => {
     try {
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -154,7 +184,38 @@ onMounted(async () => {
         console.error('Ошибка загрузки данных:', error.response ? error.response.data : error.message);
         toast.value.showToast('Ошибка при загрузке данных. Проверьте консоль.', 'error');
     }
-});
+};
+
+// Функции администратора
+const createNewProduct = () => {
+    if (!currentUser.value || !currentUser.value.is_superuser) {
+        toast.value.showToast('У вас нет прав для создания товаров', 'error');
+        return;
+    }
+    
+    // Здесь должна быть реализация формы создания или переход на страницу создания
+    toast.value.showToast('Функция создания товара находится в разработке', 'info');
+};
+
+const createNewCategory = () => {
+    if (!currentUser.value || !currentUser.value.is_superuser) {
+        toast.value.showToast('У вас нет прав для создания категорий', 'error');
+        return;
+    }
+    
+    // Здесь должна быть реализация формы создания или переход на страницу создания
+    toast.value.showToast('Функция создания категории находится в разработке', 'info');
+};
+
+const manageUsers = () => {
+    if (!currentUser.value || !currentUser.value.is_superuser) {
+        toast.value.showToast('У вас нет прав для управления пользователями', 'error');
+        return;
+    }
+    
+    // Здесь должен быть переход на страницу управления пользователями
+    toast.value.showToast('Функция управления пользователями находится в разработке', 'info');
+};
 
 const onSwiper = (swiper) => {
     swiperInstance.value = swiper;
@@ -646,5 +707,50 @@ const decreaseQuantity = async (product) => {
     background: #fff;
     border-radius: 12px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+/* Стили для админ-панели */
+.admin-dashboard {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    border-left: 4px solid #6b46c1;
+}
+
+.admin-title {
+    color: #6b46c1;
+    font-size: 20px;
+    margin-bottom: 15px;
+}
+
+.admin-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.admin-button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.admin-button.create {
+    background-color: #4caf50;
+    color: white;
+}
+
+.admin-button.manage {
+    background-color: #2196f3;
+    color: white;
+}
+
+.admin-button:hover {
+    opacity: 0.9;
 }
 </style>
