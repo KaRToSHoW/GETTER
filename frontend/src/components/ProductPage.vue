@@ -535,12 +535,12 @@ const deleteReview = async (reviewId) => {
         const token = localStorage.getItem('token');
         
         // Отправляем запрос на удаление отзыва на сервер
-        await axios.post(`${API_BASE_URL}/main/products/${route.params.id}/reviews/`, {
-            action: 'delete',
-            review_id: reviewId
-        }, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        await axios.delete(
+            `${API_BASE_URL}/main/products/${route.params.id}/reviews/${reviewId}/`, 
+            {
+                headers: { Authorization: `Bearer ${token}` }
+            }
+        );
         
         // Удаляем отзыв из списка после успешного запроса
         reviews.value = reviews.value.filter(review => review.id !== reviewId);

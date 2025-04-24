@@ -16,6 +16,34 @@ class CategoryListView(APIView):
         serializer = CategorySerializer(categories, many=True, context={'request': request})
         return Response(serializer.data)
 
+    def post(self, request):
+        if not request.user.is_superuser:
+            return Response({'error': 'Только администратор может создавать категории'}, 
+                          status=status.HTTP_403_FORBIDDEN)
+        serializer = CategorySerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request):
+        if not request.user.is_superuser:
+            return Response({'error': 'Только администратор может редактировать категории'}, 
+                          status=status.HTTP_403_FORBIDDEN)
+        try:
+            category_id = request.data.get('id')
+            if not category_id:
+                return Response({'error': 'ID категории не указан'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            category = Category.objects.get(id=category_id)
+            serializer = CategorySerializer(category, data=request.data, context={'request': request})
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Category.DoesNotExist:
+            return Response({'error': 'Категория не найдена'}, status=status.HTTP_404_NOT_FOUND)
+
 class ProductListView(APIView):
     permission_classes = [AllowAny]
 
@@ -32,6 +60,19 @@ class ProductListView(APIView):
         serializer = ProductSerializer(products, many=True, context={'request': request})
         return Response(serializer.data)
 
+    def post(self, request):
+        if not request.user.is_superuser:
+            return Response({'error': 'Только администратор может создавать товары'}, 
+                          status=status.HTTP_403_FORBIDDEN)
+        try:
+            serializer = ProductSerializer(data=request.data, context={'request': request})
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class ProductDetailView(APIView):
     permission_classes = [AllowAny]
 
@@ -42,6 +83,33 @@ class ProductDetailView(APIView):
             return Response(serializer.data)
         except Product.DoesNotExist:
             return Response({'error': 'Продукт не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+    def delete(self, request, pk):
+        if not request.user.is_superuser:
+            return Response({'error': 'Только администратор может удалять товары'}, 
+                          status=status.HTTP_403_FORBIDDEN)
+        try:
+            product = Product.objects.get(id=pk)
+            product.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Product.DoesNotExist:
+            return Response({'error': 'Продукт не найден'}, 
+                          status=status.HTTP_404_NOT_FOUND)
+
+    def put(self, request, pk):
+        if not request.user.is_superuser:
+            return Response({'error': 'Только администратор может редактировать товары'}, 
+                          status=status.HTTP_403_FORBIDDEN)
+        try:
+            product = Product.objects.get(id=pk)
+            serializer = ProductSerializer(product, data=request.data, context={'request': request})
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Product.DoesNotExist:
+            return Response({'error': 'Продукт не найден'}, 
+                          status=status.HTTP_404_NOT_FOUND)
 
 class ReviewListCreateView(APIView):
     permission_classes = [IsAuthenticated]
@@ -73,6 +141,14 @@ class ReviewListCreateView(APIView):
             return Response({'error': 'Продукт не найден'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request, product_id, review_id):
+        try:
+            review = Review.objects.get(id=review_id, product_id=product_id, user=request.user)
+            review.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Review.DoesNotExist:
+            return Response({'error': 'Отзыв не найден'}, status=status.HTTP_404_NOT_FOUND)
 
 class OrderDetailView(APIView):
     permission_classes = [IsAuthenticated]

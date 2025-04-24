@@ -25,13 +25,14 @@ class CategorySerializer(serializers.ModelSerializer):
     
 class ProductSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
+    category_id = serializers.IntegerField(write_only=True)
     image = serializers.ImageField(required=False, allow_null=True)
     url = serializers.SerializerMethodField()
-    average_rating = serializers.FloatField(read_only=True, required=False)  # Средний рейтинг
+    average_rating = serializers.FloatField(read_only=True, required=False)
 
     class Meta:
         model = Product
-        fields = ['id', 'sku', 'name', 'description', 'price', 'stock', 'category', 'image', 'is_available', 'specifications', 'url', 'average_rating']
+        fields = ['id', 'sku', 'name', 'description', 'price', 'stock', 'category', 'category_id', 'image', 'is_available', 'specifications', 'url', 'average_rating']
 
     def get_url(self, obj):
         return obj.get_absolute_url()
