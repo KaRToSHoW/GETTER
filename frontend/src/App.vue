@@ -8,12 +8,18 @@
   </div>
 </template>
 
+<style>
+body {
+  font-family: sans-serif;
+}
+</style>
+
 <script>
 import './assets/css/reset.css';
 
 import { provide, ref, onMounted } from 'vue';
 import AppHeader from './components/AppHeader.vue';
-import { useRouter } from 'vue-router'; // Импортируйте useRouter
+import { useRouter } from 'vue-router'; 
 
 export default {
   name: 'App',
@@ -22,14 +28,13 @@ export default {
   },
   setup() {
     const isAuthenticated = ref(false);
-    const router = useRouter(); // Получаем доступ к router
+    const router = useRouter(); 
 
     const checkAuthentication = () => {
       const token = localStorage.getItem('token');
       isAuthenticated.value = token !== null;
     };
 
-    // Проверка состояния авторизации при монтировании компонента
     onMounted(() => {
       checkAuthentication();
     });
@@ -37,13 +42,13 @@ export default {
     // Метод для выхода
     const logout = () => {
       localStorage.removeItem('token');
-      isAuthenticated.value = false; // Обновляем состояние авторизации
-      router.push('/login'); // Перенаправляем на страницу входа
+      isAuthenticated.value = false; 
+      router.push('/login'); 
     };
 
     // Передаем данные для использования в дочерних компонентах
     provide('isAuthenticated', isAuthenticated);
-    provide('logout', logout);  // Передаем метод для выхода
+    provide('logout', logout);
 
     return {
       isAuthenticated,

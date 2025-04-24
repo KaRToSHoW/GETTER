@@ -109,6 +109,170 @@
             </div>
             <p v-if="products.length === 0" class="no-data">Нет доступных товаров.</p>
         </div>
+
+        <!-- Модальное окно для создания категории -->
+        <div v-if="showCategoryForm" class="modal-overlay" @click.self="cancelCategoryCreate">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Создание новой категории</h3>
+                    <button class="close-button" @click="cancelCategoryCreate">&times;</button>
+                </div>
+                <form @submit.prevent="submitNewCategory" class="create-form">
+                    <div class="form-group">
+                        <label>Название категории:</label>
+                        <input 
+                            v-model="newCategory.name" 
+                            required 
+                            class="form-input"
+                            placeholder="Введите название категории"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label>Изображение категории:</label>
+                        <div class="file-input-wrapper">
+                            <input 
+                                type="file" 
+                                @change="handleCategoryImageUpload" 
+                                accept="image/*"
+                                class="file-input"
+                                id="categoryImage"
+                            />
+                            <label for="categoryImage" class="file-input-label">
+                                Выберите изображение
+                            </label>
+                        </div>
+                        <div v-if="categoryImagePreview" class="image-preview">
+                            <img :src="categoryImagePreview" alt="Preview" />
+                        </div>
+                    </div>
+                    <div class="form-buttons">
+                        <button type="button" @click="cancelCategoryCreate" class="cancel-button">Отмена</button>
+                        <button type="submit" class="save-button">Создать</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Модальное окно для создания товара -->
+        <div v-if="showCreateProductForm" class="modal-overlay" @click.self="cancelCreateProduct">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Создание нового товара</h3>
+                    <button class="close-button" @click="cancelCreateProduct">&times;</button>
+                </div>
+                <form @submit.prevent="submitNewProduct" class="create-form">
+                    <div class="form-group">
+                        <label>Название товара:</label>
+                        <input 
+                            v-model="newProduct.name" 
+                            required 
+                            class="form-input"
+                            placeholder="Введите название товара"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label>Артикул:</label>
+                        <input 
+                            v-model="newProduct.sku" 
+                            required 
+                            class="form-input"
+                            placeholder="Введите артикул товара"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label>Описание:</label>
+                        <textarea 
+                            v-model="newProduct.description" 
+                            class="form-input"
+                            placeholder="Введите описание товара"
+                            rows="3"
+                        ></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Категория:</label>
+                        <select v-model="newProduct.category" required class="form-input">
+                            <option value="">Выберите категорию</option>
+                            <option v-for="category in categories" :key="category.id" :value="category.id">
+                                {{ category.name }}
+                            </option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Цена:</label>
+                        <input 
+                            v-model.number="newProduct.price" 
+                            type="number" 
+                            min="0" 
+                            step="0.01" 
+                            required 
+                            class="form-input"
+                            placeholder="0.00"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label>Количество на складе:</label>
+                        <input 
+                            v-model.number="newProduct.stock" 
+                            type="number" 
+                            min="0" 
+                            required 
+                            class="form-input"
+                            placeholder="0"
+                        />
+                    </div>
+                    <div class="form-group">
+                        <label>Изображение товара:</label>
+                        <div class="file-input-wrapper">
+                            <input 
+                                type="file" 
+                                @change="handleProductImageUpload" 
+                                accept="image/*"
+                                class="file-input"
+                                id="productImage"
+                            />
+                            <label for="productImage" class="file-input-label">
+                                Выберите изображение
+                            </label>
+                        </div>
+                        <div v-if="productImagePreview" class="image-preview">
+                            <img :src="productImagePreview" alt="Preview" />
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Характеристики:</label>
+                        <button type="button" @click="addSpecification" class="add-spec-button">
+                            Добавить характеристику
+                        </button>
+                        <div v-for="(spec, index) in specifications" :key="index" class="specification-item">
+                            <input 
+                                v-model="spec.key" 
+                                placeholder="Название" 
+                                class="form-input spec-input"
+                            />
+                            <input 
+                                v-model="spec.value" 
+                                placeholder="Значение" 
+                                class="form-input spec-input"
+                            />
+                            <button type="button" @click="removeSpecification(index)" class="remove-spec-button">
+                                &#10005;
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Статус доступности:</label>
+                        <select v-model="newProduct.is_available" class="form-input">
+                            <option :value="true">Доступен</option>
+                            <option :value="false">Недоступен</option>
+                        </select>
+                    </div>
+                    <div class="form-buttons">
+                        <button type="button" @click="cancelCreateProduct" class="cancel-button">Отмена</button>
+                        <button type="submit" class="save-button">Создать</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -133,10 +297,33 @@ const modules = ref([Pagination]);
 const swiperInstance = ref(null);
 const toast = ref(null);
 const currentUser = ref(null);
+const showCategoryForm = ref(false);
+const showCreateProductForm = ref(false);
+const productImagePreview = ref(null);
+const specifications = ref([]);
+const newProduct = ref({
+    name: '',
+    sku: '',
+    description: '',
+    price: 0,
+    stock: 0,
+    category: '',
+    image: null,
+    is_available: true,
+    specifications: {}
+});
+
+const newCategory = ref({
+    name: '',
+    image: null
+});
+
+const categoryImagePreview = ref(null);
 
 onMounted(async () => {
     await loadCurrentUser();
     await loadData();
+    await loadCategories();
 });
 
 const loadCurrentUser = async () => {
@@ -186,15 +373,23 @@ const loadData = async () => {
     }
 };
 
+const loadCategories = async () => {
+    try {
+        const response = await axios.get(`${API_BASE_URL}/main/categories/`);
+        categories.value = response.data;
+    } catch (error) {
+        console.error('Ошибка загрузки категорий:', error);
+        toast.value.showToast('Ошибка при загрузке категорий', 'error');
+    }
+};
+
 // Функции администратора
 const createNewProduct = () => {
     if (!currentUser.value || !currentUser.value.is_superuser) {
         toast.value.showToast('У вас нет прав для создания товаров', 'error');
         return;
     }
-    
-    // Здесь должна быть реализация формы создания или переход на страницу создания
-    toast.value.showToast('Функция создания товара находится в разработке', 'info');
+    showCreateProductForm.value = true;
 };
 
 const createNewCategory = () => {
@@ -203,8 +398,7 @@ const createNewCategory = () => {
         return;
     }
     
-    // Здесь должна быть реализация формы создания или переход на страницу создания
-    toast.value.showToast('Функция создания категории находится в разработке', 'info');
+    showCategoryForm.value = true;
 };
 
 const manageUsers = () => {
@@ -335,6 +529,131 @@ const decreaseQuantity = async (product) => {
     } catch (error) {
         console.error('Ошибка уменьшения количества:', error.response ? error.response.data : error.message);
         toast.value.showToast('Ошибка при уменьшении количества.', 'error');
+    }
+};
+
+const handleCategoryImageUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+        newCategory.value.image = file;
+        const reader = new FileReader();
+        reader.onload = e => categoryImagePreview.value = e.target.result;
+        reader.readAsDataURL(file);
+    }
+};
+
+const cancelCategoryCreate = () => {
+    newCategory.value = {
+        name: '',
+        image: null
+    };
+    categoryImagePreview.value = null;
+    showCategoryForm.value = false;
+};
+
+const submitNewCategory = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        const formData = new FormData();
+        formData.append('name', newCategory.value.name);
+        if (newCategory.value.image) {
+            formData.append('image', newCategory.value.image);
+        }
+        
+        await axios.post(`${API_BASE_URL}/main/categories/`, formData, {
+            headers: { 
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'multipart/form-data'
+            }
+        });
+        
+        await loadData();
+        
+        cancelCategoryCreate();
+        toast.value.showToast('Категория успешно создана!', 'success');
+    } catch (error) {
+        console.error('Ошибка создания категории:', error);
+        toast.value.showToast('Ошибка при создании категории: ' + (error.response?.data?.detail || error.message), 'error');
+    }
+};
+
+const handleProductImageUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+        newProduct.value.image = file;
+        const reader = new FileReader();
+        reader.onload = e => productImagePreview.value = e.target.result;
+        reader.readAsDataURL(file);
+    }
+};
+
+const addSpecification = () => {
+    specifications.value.push({ key: '', value: '' });
+};
+
+const removeSpecification = (index) => {
+    specifications.value.splice(index, 1);
+};
+
+const cancelCreateProduct = () => {
+    newProduct.value = {
+        name: '',
+        sku: '',
+        description: '',
+        price: 0,
+        stock: 0,
+        category: '',
+        image: null,
+        is_available: true,
+        specifications: {}
+    };
+    specifications.value = [];
+    productImagePreview.value = null;
+    showCreateProductForm.value = false;
+};
+
+const submitNewProduct = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        const formData = new FormData();
+
+        // Add category_id instead of category
+        formData.append('category_id', newProduct.value.category);
+
+        // Add other fields
+        formData.append('name', newProduct.value.name);
+        formData.append('sku', newProduct.value.sku);
+        formData.append('description', newProduct.value.description);
+        formData.append('price', newProduct.value.price);
+        formData.append('stock', newProduct.value.stock);
+        formData.append('is_available', newProduct.value.is_available);
+
+        if (newProduct.value.image) {
+            formData.append('image', newProduct.value.image);
+        }
+
+        // Convert specifications to JSON and append
+        const specs = {};
+        specifications.value.forEach(spec => {
+            if (spec.key && spec.value) {
+                specs[spec.key] = spec.value;
+            }
+        });
+        formData.append('specifications', JSON.stringify(specs));
+
+        await axios.post(`${API_BASE_URL}/main/products/`, formData, {
+            headers: { 
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'multipart/form-data'
+            }
+        });
+
+        toast.value.showToast('Товар успешно создан!', 'success');
+        cancelCreateProduct();
+        await loadData(); // Перезагружаем список товаров
+    } catch (error) {
+        console.error('Ошибка создания товара:', error);
+        toast.value.showToast('Ошибка при создании товара: ' + (error.response?.data?.detail || error.message), 'error');
     }
 };
 </script>
@@ -752,5 +1071,274 @@ const decreaseQuantity = async (product) => {
 
 .admin-button:hover {
     opacity: 0.9;
+}
+
+.file-input {
+    margin-top: 8px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    width: 100%;
+}
+
+.image-preview {
+    margin-top: 12px;
+    max-width: 200px;
+    max-height: 200px;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+}
+
+.image-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Стили для модального окна */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 12px;
+    padding: 0;
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    animation: modalAppear 0.3s ease-out;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid #eee;
+    background-color: #f8f9fa;
+    border-radius: 12px 12px 0 0;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: #2c3e50;
+    font-size: 1.5rem;
+}
+
+.close-button {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: #666;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.3s;
+}
+
+.close-button:hover {
+    background-color: #eee;
+}
+
+.create-form {
+    padding: 20px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+.form-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 16px;
+    transition: border-color 0.3s;
+}
+
+.form-input:focus {
+    border-color: #6b46c1;
+    outline: none;
+}
+
+textarea.form-input {
+    resize: vertical;
+    min-height: 100px;
+}
+
+.specification-item {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.spec-input {
+    width: 100%;
+}
+
+.add-spec-button {
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-bottom: 10px;
+}
+
+.remove-spec-button {
+    background-color: #ff4444;
+    color: white;
+    border: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.file-input-wrapper {
+    position: relative;
+}
+
+.file-input {
+    position: absolute;
+    width: 0.1px;
+    height: 0.1px;
+    opacity: 0;
+    overflow: hidden;
+    z-index: -1;
+}
+
+.file-input-label {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: #6b46c1;
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.file-input-label:hover {
+    background-color: #553c9a;
+}
+
+.image-preview {
+    margin-top: 12px;
+    max-width: 200px;
+    max-height: 200px;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 2px solid #eee;
+}
+
+.image-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.form-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 20px;
+    position: sticky;
+    bottom: 0;
+    background: white;
+    padding-top: 12px;
+    border-top: 1px solid #eee;
+}
+
+.cancel-button, .save-button {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.cancel-button {
+    background-color: #fff;
+    border: 1px solid #ddd;
+    color: #666;
+}
+
+.cancel-button:hover {
+    background-color: #f8f9fa;
+    border-color: #666;
+}
+
+.save-button {
+    background-color: #6b46c1;
+    border: none;
+    color: white;
+}
+
+.save-button:hover {
+    background-color: #553c9a;
+}
+
+.admin-button.create {
+    background: linear-gradient(135deg, #6b46c1, #553c9a);
+    color: white;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.admin-button.create:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    background: linear-gradient(135deg, #553c9a, #4c3282);
+}
+
+@keyframes modalAppear {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 </style>
