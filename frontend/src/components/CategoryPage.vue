@@ -1,65 +1,204 @@
 <template>
-    <div class="category-container">
-        <h2 class="category-title">{{ categoryName }}</h2>
-        
-        <!-- Административная панель -->
-        <div v-if="currentUser && currentUser.is_superuser" class="admin-actions">
-            <button @click="createNewProduct" class="admin-button">Добавить товар в категорию</button>
-        </div>
-        
-        <div class="products-grid">
-            <div v-for="product in categoryProducts" :key="product.id" class="product-card">
-                <!-- Кнопка удаления для администратора -->
-                <button v-if="currentUser && currentUser.is_superuser" 
-                       @click="deleteProduct(product.id)" 
-                       class="admin-delete-btn">✖</button>
-                <!-- Кнопка редактирования для администратора -->
-                <button v-if="currentUser && currentUser.is_superuser" 
-                       @click="editProduct(product)" 
-                       class="admin-edit-btn">✎</button>
-                <router-link :to="`/product/${product.id}`" class="product-link">
-                    <div class="image-wrapper">
-                        <img :src="product.image || defaultImage" class="product-image" />
-                        <div class="discount-tag">-4%</div>
+    <div class="page-layout">
+        <!-- Сайдбар с фильтрами -->
+        <aside class="filters-sidebar">
+            <h3 class="filters-title">Фильтры</h3>
+            
+            <!-- Фильтр по цене -->
+            <div class="filter-section">
+                <h4>Цена</h4>
+                <div class="price-range">
+                    <div class="price-inputs">
+                        <input 
+                            type="number" 
+                            v-model="filters.minPrice" 
+                            placeholder="От" 
+                            @input="debouncedApplyFilters"
+                            class="price-input"
+                        >
+                        <span class="price-separator">—</span>
+                        <input 
+                            type="number" 
+                            v-model="filters.maxPrice" 
+                            placeholder="До" 
+                            @input="debouncedApplyFilters"
+                            class="price-input"
+                        >
                     </div>
-                </router-link>
-                <div class="product-content">
-                    <h3>{{ product.name }}</h3>
-                    <div class="price-container">
-                        <p class="old-price"><s>{{ (product.price / 0.96).toFixed(2) }} ₽</s></p>
-                        <p class="price">{{ product.price }} ₽</p>
+                    <div class="price-slider">
+                        <div class="slider-track"></div>
+                        <input 
+                            type="range" 
+                            v-model="filters.minPrice" 
+                            :min="minAvailablePrice" 
+                            :max="maxAvailablePrice"
+                            @input="debouncedApplyFilters"
+                            class="range-input"
+                        >
+                        <input 
+                            type="range" 
+                            v-model="filters.maxPrice" 
+                            :min="minAvailablePrice" 
+                            :max="maxAvailablePrice"
+                            @input="debouncedApplyFilters"
+                            class="range-input"
+                        >
                     </div>
-                    <div class="availability" :class="{ 'out-of-stock': !product.is_available }">
-                        <span>{{ product.is_available ? 'В наличии' : 'Нет в наличии' }}</span>
-                        <span class="stock">Осталось: {{ product.stock }} шт.</span>
-                    </div>
-                    <div v-if="product.specifications" class="specifications">
-                        <div v-for="(value, key) in product.specifications" :key="key" class="spec-item">
-                            <span class="spec-key">{{ key }}:</span> {{ value }}
-                        </div>
-                    </div>
-                </div>
-                <div class="button-group">
-                    <div v-if="cartItems[product.id]" class="quantity-controls">
-                        <button @click="decreaseQuantity(product)" class="quantity-button">-</button>
-                        <span class="quantity">{{ cartItems[product.id] }}</span>
-                        <button @click="increaseQuantity(product)" class="quantity-button">+</button>
-                    </div>
-                    <button 
-                        v-else 
-                        @click="addToCart(product)" 
-                        class="add-to-cart-button" 
-                        :disabled="!product.is_available"
-                    >
-                        {{ product.is_available ? 'В корзину' : 'Недоступно' }}
-                    </button>
-                    <button :class="['wishlist-button', { 'active': isInWishlist(product.id) }]" @click="toggleWishlist(product)">
-                        <span class="heart-icon">❤️</span>
-                    </button>
                 </div>
             </div>
-            <p v-if="categoryProducts.length === 0" class="no-data">В этой категории нет товаров.</p>
-        </div>
+
+            <!-- Фильтр по наличию -->
+            <div class="filter-section">
+                <h4>Наличие</h4>
+                <label class="checkbox-label">
+                    <input 
+                        type="checkbox" 
+                        v-model="filters.inStock"
+                        @change="debouncedApplyFilters"
+                    >
+                    <span class="checkbox-text">В наличии</span>
+                </label>
+                <label class="checkbox-label">
+                    <input 
+                        type="checkbox" 
+                        v-model="filters.hasDiscount"
+                        @change="debouncedApplyFilters"
+                    >
+                    <span class="checkbox-text">Со скидкой</span>
+                </label>
+            </div>
+
+            <!-- Фильтры по характеристикам -->
+            <div v-for="(values, key) in availableSpecifications" 
+                 :key="key" 
+                 class="filter-section"
+            >
+                <h4>{{ key }}</h4>
+                <div class="spec-values">
+                    <label 
+                        v-for="value in values" 
+                        :key="value" 
+                        class="checkbox-label"
+                        :style="{ borderColor: getSpecificationColor(key) }"
+                    >
+                        <input 
+                            type="checkbox" 
+                            v-model="filters.specifications[key]" 
+                            :value="value"
+                            @change="debouncedApplyFilters"
+                        >
+                        <span class="checkbox-text">{{ value }} ({{ getFilterValueCount(key, value) }})</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Сортировка -->
+            <div class="filter-section">
+                <h4>Сортировка</h4>
+                <select v-model="filters.sortBy" @change="debouncedApplyFilters" class="sort-select">
+                    <option value="popular">По популярности</option>
+                    <option value="price-asc">Сначала дешевле</option>
+                    <option value="price-desc">Сначала дороже</option>
+                    <option value="new">Сначала новые</option>
+                    <option value="rating">По рейтингу</option>
+                    <option value="discount">По размеру скидки</option>
+                    <option value="name-asc">По названию А-Я</option>
+                    <option value="name-desc">По названию Я-А</option>
+                </select>
+            </div>
+
+            <button @click="resetFilters" class="reset-filters-btn">
+                Сбросить все фильтры
+            </button>
+        </aside>
+
+        <!-- Основной контент -->
+        <main class="main-content">
+            <div class="category-header">
+                <h2 class="category-title">{{ categoryName }}</h2>
+                
+                <!-- Административная панель -->
+                <div v-if="currentUser && currentUser.is_superuser" class="admin-actions">
+                    <button @click="createNewProduct" class="admin-button">
+                        <span class="plus-icon">+</span> Добавить товар
+                    </button>
+                </div>
+
+                <!-- Активные фильтры -->
+                <div v-if="activeFilters.length > 0" class="active-filters">
+                    <div v-for="filter in activeFilters" 
+                         :key="filter.type + (filter.key || '') + (filter.value || '')"
+                         class="filter-tag"
+                         :style="filter.type === 'spec' ? { borderColor: getSpecificationColor(filter.key) } : {}"
+                    >
+                        <span class="filter-tag-text">
+                            <template v-if="filter.type === 'spec'">
+                                {{ filter.key }}: {{ filter.values.join(', ') }}
+                            </template>
+                            <template v-else>
+                                {{ filter.value }}
+                            </template>
+                        </span>
+                        <button class="remove-filter" @click="removeFilter(filter)">×</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Сетка товаров -->
+            <div class="products-grid">
+                <div v-for="product in categoryProducts" :key="product.id" class="product-card">
+                    <!-- Кнопка удаления для администратора -->
+                    <button v-if="currentUser && currentUser.is_superuser" 
+                           @click="deleteProduct(product.id)" 
+                           class="admin-delete-btn">✖</button>
+                    <!-- Кнопка редактирования для администратора -->
+                    <button v-if="currentUser && currentUser.is_superuser" 
+                           @click="editProduct(product)" 
+                           class="admin-edit-btn">✎</button>
+                    <router-link :to="`/product/${product.id}`" class="product-link">
+                        <div class="image-wrapper">
+                            <img :src="product.image || defaultImage" class="product-image" />
+                            <div class="discount-tag">-4%</div>
+                        </div>
+                    </router-link>
+                    <div class="product-content">
+                        <h3>{{ product.name }}</h3>
+                        <div class="price-container">
+                            <p class="old-price"><s>{{ (product.price / 0.96).toFixed(2) }} ₽</s></p>
+                            <p class="price">{{ product.price }} ₽</p>
+                        </div>
+                        <div class="availability" :class="{ 'out-of-stock': !product.is_available }">
+                            <span>{{ product.is_available ? 'В наличии' : 'Нет в наличии' }}</span>
+                            <span class="stock">Осталось: {{ product.stock }} шт.</span>
+                        </div>
+                        <div v-if="product.specifications" class="specifications">
+                            <div v-for="(value, key) in product.specifications" :key="key" class="spec-item">
+                                <span class="spec-key">{{ key }}:</span> {{ value }}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="button-group">
+                        <div v-if="cartItems[product.id]" class="quantity-controls">
+                            <button @click="decreaseQuantity(product)" class="quantity-button">-</button>
+                            <span class="quantity">{{ cartItems[product.id] }}</span>
+                            <button @click="increaseQuantity(product)" class="quantity-button">+</button>
+                        </div>
+                        <button 
+                            v-else 
+                            @click="addToCart(product)" 
+                            class="add-to-cart-button" 
+                            :disabled="!product.is_available"
+                        >
+                            {{ product.is_available ? 'В корзину' : 'Недоступно' }}
+                        </button>
+                        <button :class="['wishlist-button', { 'active': isInWishlist(product.id) }]" @click="toggleWishlist(product)">
+                            <span class="heart-icon">❤️</span>
+                        </button>
+                    </div>
+                </div>
+                <p v-if="categoryProducts.length === 0" class="no-data">В этой категории нет товаров.</p>
+            </div>
+        </main>
 
         <!-- Модальное окно для редактирования товара -->
         <div v-if="editingProduct" class="edit-product-modal">
@@ -77,10 +216,6 @@
                     <div class="form-group">
                         <label>Количество на складе:</label>
                         <input v-model.number="editingProduct.stock" type="number" min="0" required />
-                    </div>
-                    <div class="form-group">
-                        <label>Артикул:</label>
-                        <input v-model="editingProduct.sku" />
                     </div>
                     <div class="form-group">
                         <label>Доступность:</label>
@@ -104,18 +239,42 @@
                 </form>
             </div>
         </div>
+
+        <!-- Модальное окно для добавления товаров -->
+        <div v-if="isAddingProducts" class="edit-product-modal">
+            <div class="edit-product-content">
+                <h3>Добавление товаров в категорию</h3>
+                <form @submit.prevent="addSelectedProducts" class="edit-product-form">
+                    <div class="form-group">
+                        <label>Выберите товары:</label>
+                        <select v-model="selectedProducts" multiple>
+                            <option v-for="product in availableProducts" :key="product.id" :value="product.id">
+                                {{ product.name }}
+                            </option>
+                        </select>
+                    </div>
+                    <div class="form-buttons">
+                        <button type="button" @click="cancelAddingProducts" class="cancel-button">Отмена</button>
+                        <button type="submit" class="save-button">Добавить</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 </template>
 
 <script setup>
 import { ref, onMounted, computed } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
+import { debounce } from 'lodash';
 import defaultImage from '@/assets/img/Default_product_foto.jpg';
 
 const route = useRoute();
+const router = useRouter();
 const API_BASE_URL = 'http://127.0.0.1:8000';
 
+const originalProducts = ref([]); // Добавляем хранение оригинального списка
 const categoryProducts = ref([]);
 const wishlist = ref([]);
 const cartItems = ref({});
@@ -123,6 +282,248 @@ const categoryName = ref('');
 const currentUser = ref(null);
 const editingProduct = ref(null);
 const categories = ref([]);
+const isLoading = ref(false);
+const isFiltering = ref(false);
+
+const isAddingProducts = ref(false);
+const availableProducts = ref([]);
+const selectedProducts = ref([]);
+
+const filters = ref({
+    minPrice: '',
+    maxPrice: '',
+    inStock: false,
+    hasDiscount: false,
+    sortBy: 'popular',
+    specifications: {}
+});
+
+const availableSpecifications = ref({});
+const minAvailablePrice = ref(0);
+const maxAvailablePrice = ref(10000);
+
+const resetFilters = () => {
+    filters.value = {
+        minPrice: '',
+        maxPrice: '',
+        inStock: false,
+        hasDiscount: false,
+        sortBy: 'popular',
+        specifications: {}
+    };
+    applyFilters();
+};
+
+// Создаем debounced версию функции применения фильтров
+const debouncedApplyFilters = debounce(() => {
+    applyFilters();
+    updateUrlWithFilters();
+}, 300);
+
+const applyFilters = () => {
+    let filtered = [...originalProducts.value]; // Используем оригинальный список
+
+    // Фильтр по цене
+    if (filters.value.minPrice) {
+        filtered = filtered.filter(product => product.price >= filters.value.minPrice);
+    }
+    if (filters.value.maxPrice) {
+        filtered = filtered.filter(product => product.price <= filters.value.maxPrice);
+    }
+
+    // Фильтр по наличию
+    if (filters.value.inStock) {
+        filtered = filtered.filter(product => product.is_available && product.stock > 0);
+    }
+
+    // Фильтр по скидке
+    if (filters.value.hasDiscount) {
+        filtered = filtered.filter(product => {
+            const originalPrice = product.price / 0.96;
+            return originalPrice > product.price;
+        });
+    }
+
+    // Фильтр по характеристикам
+    Object.entries(filters.value.specifications).forEach(([key, values]) => {
+        if (values && values.length > 0) {
+            filtered = filtered.filter(product => {
+                return product.specifications && 
+                       values.includes(product.specifications[key]);
+            });
+        }
+    });
+
+    // Сортировка
+    switch (filters.value.sortBy) {
+        case 'price-asc':
+            filtered.sort((a, b) => a.price - b.price);
+            break;
+        case 'price-desc':
+            filtered.sort((a, b) => b.price - a.price);
+            break;
+        case 'new':
+            filtered.sort((a, b) => new Date(b.creation_date) - new Date(a.creation_date));
+            break;
+        case 'rating':
+            filtered.sort((a, b) => (b.average_rating || 0) - (a.average_rating || 0));
+            break;
+        case 'discount':
+            filtered.sort((a, b) => {
+                const discountA = a.price / 0.96 - a.price;
+                const discountB = b.price / 0.96 - b.price;
+                return discountB - discountA;
+            });
+            break;
+        case 'name-asc':
+            filtered.sort((a, b) => a.name.localeCompare(b.name));
+            break;
+        case 'name-desc':
+            filtered.sort((a, b) => b.name.localeCompare(a.name));
+            break;
+        case 'popular':
+        default:
+            // По умолчанию оставляем текущую сортировку
+            break;
+    }
+
+    categoryProducts.value = filtered;
+    isFiltering.value = false;
+};
+
+// Функция обновления URL с текущими фильтрами
+const updateUrlWithFilters = () => {
+    const query = {};
+    if (filters.value.minPrice) query.minPrice = filters.value.minPrice;
+    if (filters.value.maxPrice) query.maxPrice = filters.value.maxPrice;
+    if (filters.value.inStock) query.inStock = 'true';
+    if (filters.value.hasDiscount) query.hasDiscount = 'true';
+    if (filters.value.sortBy !== 'popular') query.sort = filters.value.sortBy;
+
+    Object.entries(filters.value.specifications).forEach(([key, values]) => {
+        if (values && values.length > 0) {
+            query[`spec_${key}`] = values.join(',');
+        }
+    });
+
+    router.replace({ query });
+};
+
+// Функция загрузки фильтров из URL
+const loadFiltersFromUrl = () => {
+    const query = route.query;
+    
+    filters.value = {
+        minPrice: query.minPrice || '',
+        maxPrice: query.maxPrice || '',
+        inStock: query.inStock === 'true',
+        hasDiscount: query.hasDiscount === 'true',
+        sortBy: query.sort || 'popular',
+        specifications: {}
+    };
+
+    // Загружаем спецификации из URL
+    Object.entries(query).forEach(([key, value]) => {
+        if (key.startsWith('spec_')) {
+            const specKey = key.replace('spec_', '');
+            filters.value.specifications[specKey] = value.split(',');
+        }
+    });
+};
+
+const updateAvailableSpecifications = () => {
+    const specs = {};
+    const prices = [];
+
+    categoryProducts.value.forEach(product => {
+        // Собираем все возможные характеристики
+        if (product.specifications) {
+            Object.entries(product.specifications).forEach(([key, value]) => {
+                if (!specs[key]) {
+                    specs[key] = new Set();
+                }
+                specs[key].add(value);
+            });
+        }
+        // Собираем все цены
+        prices.push(product.price);
+    });
+
+    // Преобразуем множества в массивы
+    Object.keys(specs).forEach(key => {
+        specs[key] = Array.from(specs[key]).sort();
+    });
+
+    availableSpecifications.value = specs;
+    if (prices.length > 0) {
+        minAvailablePrice.value = Math.floor(Math.min(...prices));
+        maxAvailablePrice.value = Math.ceil(Math.max(...prices));
+    }
+};
+
+const activeFilters = computed(() => {
+    const active = [];
+    if (filters.value.minPrice) active.push({ type: 'minPrice', value: `От ${filters.value.minPrice} ₽` });
+    if (filters.value.maxPrice) active.push({ type: 'maxPrice', value: `До ${filters.value.maxPrice} ₽` });
+    if (filters.value.inStock) active.push({ type: 'inStock', value: 'В наличии' });
+    if (filters.value.hasDiscount) active.push({ type: 'hasDiscount', value: 'Со скидкой' });
+    
+    Object.entries(filters.value.specifications).forEach(([key, values]) => {
+        if (values && values.length > 0) {
+            active.push({ type: 'spec', key, values });
+        }
+    });
+    return active;
+});
+
+const removeFilter = (filter) => {
+    switch (filter.type) {
+        case 'minPrice':
+            filters.value.minPrice = '';
+            break;
+        case 'maxPrice':
+            filters.value.maxPrice = '';
+            break;
+        case 'inStock':
+            filters.value.inStock = false;
+            break;
+        case 'hasDiscount':
+            filters.value.hasDiscount = false;
+            break;
+        case 'spec':
+            filters.value.specifications[filter.key] = [];
+            break;
+    }
+    applyFilters();
+};
+
+// Функция для определения цветовой категории для спецификации
+const getSpecificationColor = (key) => {
+    const colors = {
+        'brand': '#4299e1',
+        'color': '#48bb78',
+        'size': '#ed8936',
+        'material': '#9f7aea',
+        'default': '#718096'
+    };
+    return colors[key.toLowerCase()] || colors.default;
+};
+
+// Получение количества товаров для каждого значения фильтра
+const getFilterValueCount = (filterKey, filterValue) => {
+    return originalProducts.value.filter(product => {
+        if (filterKey === 'inStock') {
+            return product.is_available && product.stock > 0;
+        }
+        if (filterKey === 'hasDiscount') {
+            return product.price < product.price / 0.96;
+        }
+        if (product.specifications && product.specifications[filterKey]) {
+            return product.specifications[filterKey] === filterValue;
+        }
+        return false;
+    }).length;
+};
 
 onMounted(async () => {
     await loadCurrentUser();
@@ -146,7 +547,9 @@ const loadCurrentUser = async () => {
     }
 };
 
+// Модифицируем функцию загрузки данных категории
 const loadCategoryData = async () => {
+    isLoading.value = true;
     try {
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -156,6 +559,7 @@ const loadCategoryData = async () => {
         const response = await axios.get(`${API_BASE_URL}/main/products/?category=${categoryId}`, { headers });
         console.log('Ответ API:', response.data); // Логируем ответ
 
+        originalProducts.value = response.data; // Сохраняем оригинальный список
         categoryProducts.value = response.data;
         wishlist.value = (await axios.get(`${API_BASE_URL}/main/wishlist/check/`, { headers })).data.wishlist || [];
         
@@ -175,21 +579,32 @@ const loadCategoryData = async () => {
             const category = categoryProducts.value[0].category;
             categoryName.value = category ? category.name : 'Категория не найдена';
         }
+
+        updateAvailableSpecifications();
+
+        // Загружаем фильтры из URL после получения данных
+        loadFiltersFromUrl();
+        // Применяем фильтры, если они есть в URL
+        if (Object.keys(route.query).length > 0) {
+            applyFilters();
+        }
     } catch (error) {
         console.error('Ошибка загрузки товаров категории:', error.response ? error.response.data : error.message);
         alert('Ошибка при загрузке товаров категории. Проверьте консоль.');
+    } finally {
+        isLoading.value = false;
     }
 };
 
 // Функции администратора
-const createNewProduct = () => {
+const createNewProduct = async () => {
     if (!currentUser.value || !currentUser.value.is_superuser) {
-        alert('У вас нет прав для создания товаров');
+        alert('У вас нет прав для добавления товаров');
         return;
     }
     
-    // Здесь должна быть реализация формы создания или переход на страницу создания
-    alert('Функция создания товара находится в разработке');
+    await loadAvailableProducts();
+    isAddingProducts.value = true;
 };
 
 const deleteProduct = async (productId) => {
@@ -363,6 +778,70 @@ const saveEditedProduct = async () => {
         console.error('Ошибка обновления товара:', error);
         alert('Ошибка при обновлении товара. ' + (error.response?.data?.detail || error.message));
     }
+};
+
+// Функция для загрузки доступных товаров
+const loadAvailableProducts = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const response = await axios.get(`${API_BASE_URL}/main/products/`, { headers });
+        // Фильтруем товары, которые еще не в текущей категории
+        availableProducts.value = response.data.filter(product => 
+            !categoryProducts.value.some(catProduct => catProduct.id === product.id)
+        );
+    } catch (error) {
+        console.error('Ошибка загрузки товаров:', error);
+        alert('Ошибка при загрузке доступных товаров');
+    }
+};
+
+// Функция добавления выбранных товаров в категорию
+const addSelectedProducts = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        const categoryId = route.params.id;
+
+        for (const productId of selectedProducts.value) {
+            const product = availableProducts.value.find(p => p.id === productId);
+            if (product) {
+                // Создаем правильный объект для обновления
+                const updateData = {
+                    category_id: parseInt(categoryId), // Убедимся, что ID - число
+                    name: product.name,
+                    sku: product.sku,
+                    price: product.price,
+                    stock: product.stock,
+                    is_available: product.is_available,
+                    description: product.description || '',
+                    specifications: product.specifications || {}
+                };
+
+                await axios.put(
+                    `${API_BASE_URL}/main/products/${productId}/`,
+                    updateData,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+            }
+        }
+
+        // Обновляем список товаров
+        await loadCategoryData();
+        
+        // Сбрасываем состояние
+        selectedProducts.value = [];
+        isAddingProducts.value = false;
+        alert('Товары успешно добавлены в категорию');
+    } catch (error) {
+        console.error('Ошибка добавления товаров:', error);
+        alert('Ошибка при добавлении товаров в категорию: ' + (error.response?.data?.detail || error.message));
+    }
+};
+
+// Функция отмены добавления товаров
+const cancelAddingProducts = () => {
+    selectedProducts.value = [];
+    isAddingProducts.value = false;
 };
 </script>
 
@@ -745,5 +1224,283 @@ const saveEditedProduct = async () => {
 .save-button {
     background-color: #4caf50;
     color: white;
+}
+
+.page-layout {
+    display: flex;
+    gap: 30px;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+    min-height: calc(100vh - 60px);
+}
+
+.filters-sidebar {
+    width: 280px;
+    height: fit-content;
+    position: sticky;
+    top: 20px;
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.filters-title {
+    font-size: 20px;
+    color: #1a1a1a;
+    margin: 0 0 24px;
+    font-weight: 600;
+}
+
+.filter-section {
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+}
+
+.filter-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.filter-section h4 {
+    font-size: 16px;
+    color: #4a5568;
+    margin: 0 0 16px;
+    font-weight: 500;
+}
+
+.price-range {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.price-inputs {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 8px;
+    align-items: center;
+}
+
+.price-separator {
+    color: #718096;
+    font-weight: 500;
+}
+
+.price-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #2d3748;
+}
+
+.price-slider {
+    position: relative;
+    height: 4px;
+    background: #e2e8f0;
+    border-radius: 2px;
+    margin: 10px 0;
+}
+
+.slider-track {
+    position: absolute;
+    height: 100%;
+    background: #6b46c1;
+    border-radius: 2px;
+}
+
+.range-input {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    appearance: none;
+    background: none;
+    pointer-events: none;
+}
+
+.range-input::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #6b46c1;
+    border: 2px solid white;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    pointer-events: auto;
+    transition: transform 0.2s;
+}
+
+.range-input::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+}
+
+.checkbox-label:hover {
+    background: #f7fafc;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #cbd5e0;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.checkbox-text {
+    font-size: 14px;
+    color: #4a5568;
+}
+
+.spec-values {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+.spec-values::-webkit-scrollbar {
+    width: 4px;
+}
+
+.spec-values::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.spec-values::-webkit-scrollbar-thumb {
+    background: #cbd5e0;
+    border-radius: 2px;
+}
+
+.sort-select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #2d3748;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sort-select:hover {
+    border-color: #6b46c1;
+}
+
+.reset-filters-btn {
+    width: 100%;
+    padding: 12px;
+    margin-top: 20px;
+    background: #e53e3e;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.reset-filters-btn:hover {
+    background: #c53030;
+    transform: translateY(-2px);
+}
+
+.main-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.category-header {
+    background: white;
+    padding: 24px;
+    border-radius: 16px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.active-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.filter-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: #f7fafc;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    font-size: 14px;
+    color: #4a5568;
+    transition: all 0.2s;
+}
+
+.filter-tag:hover {
+    background: #edf2f7;
+}
+
+.remove-filter {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: none;
+    color: #a0aec0;
+    cursor: pointer;
+    padding: 0;
+    font-size: 16px;
+    transition: all 0.2s;
+}
+
+.remove-filter:hover {
+    color: #e53e3e;
+}
+
+.form-group select[multiple] {
+    height: 300px;
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #2d3748;
+    background-color: #f8fafc;
+}
+
+.form-group select[multiple] option {
+    padding: 8px 12px;
+    margin: 2px 0;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.form-group select[multiple] option:checked {
+    background: linear-gradient(0deg, #6b46c1 0%, #6b46c1 100%);
+    color: white;
+}
+
+.form-group select[multiple] option:hover {
+    background-color: #edf2f7;
 }
 </style>

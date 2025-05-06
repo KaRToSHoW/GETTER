@@ -1,6 +1,17 @@
 from django.contrib import admin
 from django.db.models import Sum, Avg
+from django.http import HttpResponse
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.units import cm
+import os
 from .models import Category, Product, Order, OrderItem, Review, Wishlist
+
+# Регистрируем шрифт DejaVuSerif
+FONT_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'fonts', 'DejaVuSerif.ttf')
+pdfmetrics.registerFont(TTFont('DejaVuSerif', FONT_PATH))
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
@@ -57,7 +68,7 @@ class OrderAdmin(admin.ModelAdmin):
     inlines = [OrderItemInline]
     autocomplete_fields = ['user']
     ordering = ['-created_at']
-    actions = ['mark_as_shipped', 'mark_as_delivered', 'mark_as_canceled', 'send_invoice']
+    actions = ['mark_as_shipped', 'mark_as_delivered', 'mark_as_canceled', 'send_invoice', 'generate_pdf']
 
     @admin.display(description='Общая цена')
     def get_total_price(self, obj):
@@ -87,6 +98,65 @@ class OrderAdmin(admin.ModelAdmin):
         for order in queryset:
             self.message_user(request, f"Счет для заказа {order.order_number} отправлен.")
     send_invoice.short_description = "Отправить счет для выбранных заказов"
+
+    def generate_pdf(self, request, queryset):
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename="orders.pdf"'
+        
+        p = canvas.Canvas(response, pagesize=A4)
+        y = 800  # Starting y position
+        
+        for order in queryset:
+            # Order header
+            p.setFont("DejaVuSerif", 16)
+            p.drawString(50, y, f"Заказ №{order.order_number}")
+            y -= 30
+            
+            p.setFont("DejaVuSerif", 12)
+            p.drawString(50, y, f"Клиент: {order.user.username}")
+            y -= 20
+            p.drawString(50, y, f"Статус: {order.get_status_display()}")
+            y -= 20
+            p.drawString(50, y, f"Дата создания: {order.created_at.strftime('%d.%m.%Y %H:%M')}")
+            y -= 40
+            
+            # Items header
+            p.setFont("DejaVuSerif", 12)
+            p.drawString(50, y, "Товар")
+            p.drawString(300, y, "Кол-во")
+            p.drawString(400, y, "Цена")
+            y -= 20
+            
+            # Items
+            p.setFont("DejaVuSerif", 12)
+            for item in order.items.all():
+                if y < 50:  # Check if we need a new page
+                    p.showPage()
+                    y = 800
+                    p.setFont("DejaVuSerif", 12)
+                
+                p.drawString(50, y, str(item.product.name)[:35])
+                p.drawString(300, y, str(item.quantity))
+                p.drawString(400, y, f"{item.price} ₽")
+                y -= 20
+            
+            # Total
+            y -= 20
+            p.setFont("DejaVuSerif", 12)
+            p.drawString(300, y, f"Итого: {order.calculate_total_price()} ₽")
+            
+            # Add some space before next order
+            y -= 60
+            
+            if y < 100:  # Start new page if not enough space
+                p.showPage()
+                y = 800
+        
+        p.showPage()
+        p.save()
+        return response
+    
+    generate_pdf.short_description = "Сгенерировать PDF"
 
 
 @admin.register(OrderItem)

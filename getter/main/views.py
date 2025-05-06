@@ -4,7 +4,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from .models import Category, Product, Wishlist, Order, OrderItem, Review
-from .serializers import CategorySerializer, ProductSerializer, OrderSerializer, OrderItemSerializer, ReviewSerializer
+from .serializers import CategorySerializer, ProductSerializer, OrderSerializer, OrderItemSerializer, ReviewSerializer, WishlistSerializer
 from django.db.models import Avg, Count, Sum
 
 class CategoryListView(APIView):
@@ -144,11 +144,26 @@ class ReviewListCreateView(APIView):
 
     def delete(self, request, product_id, review_id):
         try:
-            review = Review.objects.get(id=review_id, product_id=product_id, user=request.user)
+            print(f"Delete review attempt - User: {request.user.username}, is_superuser: {request.user.is_superuser}")
+            print(f"Looking for review with id: {review_id}, product_id: {product_id}")
+            
+            if request.user.is_superuser:
+                print("User is superuser, attempting to delete any review")
+                review = Review.objects.get(id=review_id, product_id=product_id)
+            else:
+                print("User is not superuser, attempting to delete own review")
+                review = Review.objects.get(id=review_id, product_id=product_id, user=request.user)
+            
+            print(f"Found review: {review.id} by user {review.user.username}")
             review.delete()
+            print("Review deleted successfully")
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Review.DoesNotExist:
+            print(f"Review not found with id {review_id}")
             return Response({'error': 'Отзыв не найден'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            print(f"Error deleting review: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class OrderDetailView(APIView):
     permission_classes = [IsAuthenticated]
@@ -355,3 +370,68 @@ def popular_wishlist_products(request):
     
     serializer = ProductSerializer(popular_products, many=True, context={'request': request})
     return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def user_activity(request, user_id=None):
+    """Получение активности пользователя"""
+    try:
+        # Определяем, чью активность запрашиваем
+        target_user_id = user_id if user_id and request.user.is_superuser else request.user.id
+        
+        # Получаем заказы пользователя
+        orders = Order.objects.filter(user_id=target_user_id).order_by('-created_at')
+        recent_orders = orders.select_related('user')[:5]
+        total_orders = orders.count()
+        total_spent = orders.exclude(status='canceled').aggregate(Sum('total_price'))['total_price__sum'] or 0
+
+        # Получаем отзывы пользователя
+        reviews = Review.objects.filter(user_id=target_user_id).order_by('-created_at')
+        recent_reviews = reviews.select_related('product', 'user')[:5]
+        total_reviews = reviews.count()
+
+        # Получаем избранные товары
+        wishlist = Wishlist.objects.filter(user_id=target_user_id).order_by('-added_at')
+        wishlist_items = wishlist.select_related('product')[:5]
+        total_wishlist = wishlist.count()
+
+        # Форматируем ответ
+        response_data = {
+            'totalOrders': total_orders,
+            'totalReviews': total_reviews,
+            'wishlistCount': total_wishlist,
+            'totalSpent': float(total_spent),
+            'recentOrders': [{
+                'id': order.id,
+                'order_number': order.order_number,
+                'total_price': float(order.total_price),
+                'status': order.status,
+                'created_at': order.created_at
+            } for order in recent_orders],
+            'recentReviews': [{
+                'id': review.id,
+                'product': {
+                    'id': review.product.id,
+                    'name': review.product.name,
+                },
+                'rating': review.rating,
+                'comment': review.comment,
+                'created_at': review.created_at,
+                'pros': review.pros,
+                'cons': review.cons
+            } for review in recent_reviews],
+            'wishlistItems': [{
+                'id': item.id,
+                'product': {
+                    'id': item.product.id,
+                    'name': item.product.name,
+                    'price': float(item.product.price)
+                },
+                'added_at': item.added_at
+            } for item in wishlist_items]
+        }
+
+        return Response(response_data)
+
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
