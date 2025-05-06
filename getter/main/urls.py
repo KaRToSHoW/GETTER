@@ -1,6 +1,12 @@
 # main/urls.py
 from django.urls import path
-from .views import CategoryListView, ProductListView, OrderDetailView, add_to_wishlist, remove_from_wishlist, check_wishlist, get_cart, add_to_cart, remove_from_cart, ProductDetailView, ReviewListCreateView, get_favorites, user_orders, popular_wishlist_products
+from .views import (
+    CategoryListView, ProductListView, OrderDetailView, 
+    add_to_wishlist, remove_from_wishlist, check_wishlist, 
+    get_cart, add_to_cart, remove_from_cart, ProductDetailView, 
+    ReviewListCreateView, get_favorites, user_orders, 
+    popular_wishlist_products, user_activity
+)
 
 urlpatterns = [
     path('categories/', CategoryListView.as_view(), name='category-list'),
@@ -18,4 +24,7 @@ urlpatterns = [
     path('cart/remove/<int:item_id>/', remove_from_cart, name='remove-from-cart'),
     path('orders/<int:pk>/', OrderDetailView.as_view(), name='order_detail'),
     path('user/orders/', user_orders, name='user-orders'),
+    path('user/<int:user_id>/activity/', user_activity, name='user-activity'),
+    path('api/user-activity/<int:user_id>/', user_activity, name='user_activity'),
+    path('api/user-activity/', user_activity, name='user_activity'),
 ]

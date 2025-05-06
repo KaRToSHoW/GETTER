@@ -30,8 +30,7 @@
                     <div v-if="product.specifications" class="specifications">
                         <h4>Характеристики:</h4>
                         <ul class="specifications-list">
-                            <li v-for="(value, key) in product.specifications.specifications" :key="key"
-                                class="spec-item">
+                            <li v-for="(value, key) in product.specifications" :key="key" class="spec-item">
                                 <strong>{{ key.replace(/_/g, ' ') }}:</strong> {{ value }}
                             </li>
                         </ul>
@@ -203,6 +202,19 @@
                                 {{ category.name }}
                             </option>
                         </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Изображение товара:</label>
+                        <input 
+                            type="file" 
+                            @change="handleProductImageUpload" 
+                            accept="image/*"
+                            class="form-input"
+                        />
+                        <div v-if="editingProduct?.image" class="image-preview">
+                            <img :src="typeof editingProduct.image === 'string' ? editingProduct.image : URL.createObjectURL(editingProduct.image)" 
+                                 alt="Preview" />
+                        </div>
                     </div>
                     <div class="form-buttons">
                         <button type="button" @click="cancelEditProduct" class="cancel-button">Отмена</button>
@@ -665,19 +677,57 @@ const cancelEditProduct = () => {
 const saveEditedProduct = async () => {
     try {
         const token = localStorage.getItem('token');
-        const response = await axios.put(`${API_BASE_URL}/main/products/${editingProduct.value.id}/`, editingProduct.value, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const formData = new FormData();
+
+        // Add category_id
+        formData.append('category_id', editingProduct.value.category.id);
+
+        // Add basic fields
+        formData.append('name', editingProduct.value.name);
+        formData.append('sku', editingProduct.value.sku);
+        formData.append('description', editingProduct.value.description || '');
+        formData.append('price', editingProduct.value.price);
+        formData.append('stock', editingProduct.value.stock);
+        formData.append('is_available', editingProduct.value.is_available);
+
+        // Add specifications if they exist
+        if (editingProduct.value.specifications) {
+            formData.append('specifications', JSON.stringify(editingProduct.value.specifications));
+        }
+
+        // Keep the existing image if no new one is uploaded
+        if (editingProduct.value.image && editingProduct.value.image instanceof File) {
+            formData.append('image', editingProduct.value.image);
+        }
+
+        const response = await axios.put(
+            `${API_BASE_URL}/main/products/${editingProduct.value.id}/`, 
+            formData,
+            {
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data'
+                }
+            }
+        );
         
-        // Обновляем данные товара
+        // Update product data
         product.value = response.data;
         
-        // Закрываем модальное окно
+        // Close modal
         editingProduct.value = null;
         toast.value.showToast('Товар успешно обновлен', 'success');
     } catch (error) {
         console.error('Ошибка обновления товара:', error);
         toast.value.showToast('Ошибка при обновлении товара: ' + (error.response?.data?.detail || error.message), 'error');
+    }
+};
+
+// Функция для загрузки изображения товара
+const handleProductImageUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+        editingProduct.value.image = file;
     }
 };
 </script>
@@ -1499,5 +1549,12 @@ const saveEditedProduct = async () => {
     display: flex;
     justify-content: flex-end;
     gap: 10px;
+}
+
+.image-preview img {
+    max-width: 100%;
+    max-height: 200px;
+    margin-top: 10px;
+    border-radius: 8px;
 }
 </style>

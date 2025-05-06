@@ -3,6 +3,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import User
+from .permissions import IsAdminOrSelf
 
 from rest_framework import viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -16,7 +17,12 @@ from rest_framework.parsers import MultiPartParser, FormParser
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [AllowAny]  # Только авторизованные пользователи могут делать запросы
+    permission_classes = [IsAdminOrSelf]  # Используем новое разрешение
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [AllowAny()]
+        return super().get_permissions()
 
 @api_view(['POST'])
 def register_api(request):
@@ -65,8 +71,7 @@ def upload_profile_image(request):
         'message': 'Изображение успешно загружено',
         'profile_image': user.get_profile_image_url()
     }, status=status.HTTP_200_OK)
-    
-# your_app/views.py
+
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
 def remove_profile_image(request):
