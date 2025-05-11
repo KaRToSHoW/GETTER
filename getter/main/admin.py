@@ -33,9 +33,9 @@ CategoryAdmin.inlines.append(ProductInline)
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ('sku', 'name', 'category', 'price', 'stock', 'get_average_rating')
+    list_display = ('sku', 'name', 'category', 'price', 'discount', 'stock', 'get_average_rating')
     search_fields = ('name', 'category__name', 'sku') 
-    list_filter = ('category', 'price')
+    list_filter = ('category', 'price', 'discount', 'is_available')
     autocomplete_fields = ['category']
     ordering = ['name']
 

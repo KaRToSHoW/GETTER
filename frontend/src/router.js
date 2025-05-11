@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import LoginForm from './components/LoginForm.vue'
 import RegisterForm from './components/RegistrationForm.vue'
 import ProfilePage from './components/ProfilePage.vue'
@@ -7,6 +7,8 @@ import CartPage from './components/CartPage.vue'
 import CategoryPage from './components/CategoryPage.vue'
 import ProductPage from './components/ProductPage.vue'
 import FavoritesPage from './components/FavoritesPage.vue'
+import SearchResults from './components/SearchResults.vue'
+import CatalogPage from './components/CatalogPage.vue'
 
 const routes = [
     { path: '/login', component: LoginForm },
@@ -17,10 +19,13 @@ const routes = [
     { path: '/category/:id', name: 'CategoryPage', component: CategoryPage, props: true },
     { path: '/product/:id', name: 'ProductPage', component: ProductPage, props: true },
     { path: '/favorites', name: 'favorites', component: FavoritesPage },
+    { path: '/search', name: 'search', component: SearchResults },
+    { path: '/catalog', name: 'catalog', component: CatalogPage },
+    { path: '/', redirect: '/home' },
 ]
 
 const router = createRouter({
-    history: createWebHistory(),
+    history: createWebHashHistory(),
     routes
 })
 

@@ -47,12 +47,38 @@
             <div class="swiper-pagination"></div>
         </swiper>
 
+        <div class="advantages-section">
+            <h2 class="home-title">Наши преимущества</h2>
+            <div class="advantages-container">
+                <div class="advantage-card">
+                    <div class="advantage-icon">🚚</div>
+                    <h3>Быстрая доставка</h3>
+                    <p>Доставка на следующий день по всей России</p>
+                </div>
+                <div class="advantage-card">
+                    <div class="advantage-icon">🔄</div>
+                    <h3>Возврат без вопросов</h3>
+                    <p>30 дней на возврат без объяснения причин</p>
+                </div>
+                <div class="advantage-card">
+                    <div class="advantage-icon">🛡️</div>
+                    <h3>Гарантия качества</h3>
+                    <p>Все товары проходят тщательную проверку</p>
+                </div>
+                <div class="advantage-card">
+                    <div class="advantage-icon">📱</div>
+                    <h3>Поддержка 24/7</h3>
+                    <p>Наша служба поддержки всегда на связи</p>
+                </div>
+            </div>
+        </div>
+
         <h2 class="home-title">Категории</h2>
         <div class="categories-container">
             <button class="nav-button prev-button categories-prev">❮</button>
             <swiper class="categories-swiper"
                 :modules="modules"
-                :slides-per-view="5"
+                :slides-per-view="slidesPerView.categories"
                 :space-between="20"
                 :navigation="{
                     nextEl: '.categories-next',
@@ -75,12 +101,132 @@
             <p v-if="categories.length === 0" class="no-data">Нет доступных категорий.</p>
         </div>
 
+        <h2 class="home-title">Популярные товары</h2>
+        <div class="products-container">
+            <button class="nav-button prev-button popular-prev">❮</button>
+            <swiper class="products-swiper"
+                :modules="modules"
+                :slides-per-view="slidesPerView.products"
+                :space-between="20"
+                :navigation="{
+                    nextEl: '.popular-next',
+                    prevEl: '.popular-prev'
+                }"
+                @swiper="onPopularSwiper">
+                <swiper-slide v-for="product in popularProducts" :key="product.id">
+                    <div class="product-card">
+                        <div class="bestseller-badge">Хит продаж</div>
+                        <router-link :to="`/product/${product.id}`" class="product-link">
+                            <div class="image-wrapper">
+                                <img :src="product.image || defaultImage" class="product-image" />
+                                <div v-if="product.discount > 0" class="discount-tag">-{{ product.discount }}%</div>
+                            </div>
+                        </router-link>
+                        <div class="product-content">
+                            <h3>{{ product.name }}</h3>
+                            <div class="rating" v-if="product.average_rating">
+                                <span class="stars">
+                                    <span v-for="i in 5" :key="i" :class="['star', i <= Math.round(product.average_rating) ? 'filled' : '']">★</span>
+                                </span>
+                                <span class="rating-value">{{ product.average_rating ? product.average_rating.toFixed(1) : '0.0' }}</span>
+                            </div>
+                            <div class="price-container">
+                                <p v-if="product.discount > 0" class="old-price"><s>{{ product.price }} ₽</s></p>
+                                <p class="price">{{ product.discounted_price }} ₽</p>
+                            </div>
+                            <div class="availability" :class="{ 'out-of-stock': !product.is_available }">
+                                <span>{{ product.is_available ? 'В наличии' : 'Нет в наличии' }}</span>
+                                <span class="stock">Осталось: {{ product.stock }} шт.</span>
+                            </div>
+                        </div>
+                        <div class="button-group">
+                            <div v-if="cartItems[product.id]" class="quantity-controls">
+                                <button @click="decreaseQuantity(product)" class="quantity-button">-</button>
+                                <span class="quantity">{{ cartItems[product.id] }}</span>
+                                <button @click="increaseQuantity(product)" class="quantity-button">+</button>
+                            </div>
+                            <button v-else @click="addToCart(product)" class="add-to-cart-button"
+                                :disabled="!product.is_available">
+                                {{ product.is_available ? 'В корзину' : 'Недоступно' }}
+                            </button>
+                            <button :class="['wishlist-button', { 'active': isInWishlist(product.id) }]"
+                                @click="toggleWishlist(product)">
+                                <span class="heart-icon">❤️</span>
+                            </button>
+                        </div>
+                    </div>
+                </swiper-slide>
+            </swiper>
+            <button class="nav-button next-button popular-next">❯</button>
+            <p v-if="popularProducts.length === 0" class="no-data">Нет популярных товаров.</p>
+        </div>
+
+        <h2 class="home-title">Новинки</h2>
+        <div class="products-container">
+            <button class="nav-button prev-button new-prev">❮</button>
+            <swiper class="products-swiper"
+                :modules="modules"
+                :slides-per-view="slidesPerView.products"
+                :space-between="20"
+                :navigation="{
+                    nextEl: '.new-next',
+                    prevEl: '.new-prev'
+                }"
+                @swiper="onNewProductsSwiper">
+                <swiper-slide v-for="product in newProducts" :key="product.id">
+                    <div class="product-card">
+                        <div class="new-badge">Новинка</div>
+                        <router-link :to="`/product/${product.id}`" class="product-link">
+                            <div class="image-wrapper">
+                                <img :src="product.image || defaultImage" class="product-image" />
+                                <div v-if="product.discount > 0" class="discount-tag">-{{ product.discount }}%</div>
+                            </div>
+                        </router-link>
+                        <div class="product-content">
+                            <h3>{{ product.name }}</h3>
+                            <div class="rating" v-if="product.average_rating">
+                                <span class="stars">
+                                    <span v-for="i in 5" :key="i" :class="['star', i <= Math.round(product.average_rating) ? 'filled' : '']">★</span>
+                                </span>
+                                <span class="rating-value">{{ product.average_rating ? product.average_rating.toFixed(1) : '0.0' }}</span>
+                            </div>
+                            <div class="price-container">
+                                <p v-if="product.discount > 0" class="old-price"><s>{{ product.price }} ₽</s></p>
+                                <p class="price">{{ product.discounted_price }} ₽</p>
+                            </div>
+                            <div class="availability" :class="{ 'out-of-stock': !product.is_available }">
+                                <span>{{ product.is_available ? 'В наличии' : 'Нет в наличии' }}</span>
+                                <span class="stock">Осталось: {{ product.stock }} шт.</span>
+                            </div>
+                        </div>
+                        <div class="button-group">
+                            <div v-if="cartItems[product.id]" class="quantity-controls">
+                                <button @click="decreaseQuantity(product)" class="quantity-button">-</button>
+                                <span class="quantity">{{ cartItems[product.id] }}</span>
+                                <button @click="increaseQuantity(product)" class="quantity-button">+</button>
+                            </div>
+                            <button v-else @click="addToCart(product)" class="add-to-cart-button"
+                                :disabled="!product.is_available">
+                                {{ product.is_available ? 'В корзину' : 'Недоступно' }}
+                            </button>
+                            <button :class="['wishlist-button', { 'active': isInWishlist(product.id) }]"
+                                @click="toggleWishlist(product)">
+                                <span class="heart-icon">❤️</span>
+                            </button>
+                        </div>
+                    </div>
+                </swiper-slide>
+            </swiper>
+            <button class="nav-button next-button new-next">❯</button>
+            <p v-if="newProducts.length === 0" class="no-data">Нет новых поступлений.</p>
+        </div>
+
         <h2 class="home-title">Различные товары</h2>
         <div class="products-container">
             <button class="nav-button prev-button products-prev">❮</button>
             <swiper class="products-swiper"
                 :modules="modules"
-                :slides-per-view="4"
+                :slides-per-view="slidesPerView.products"
                 :space-between="20"
                 :navigation="{
                     nextEl: '.products-next',
@@ -92,14 +238,20 @@
                         <router-link :to="`/product/${product.id}`" class="product-link">
                             <div class="image-wrapper">
                                 <img :src="product.image || defaultImage" class="product-image" />
-                                <div class="discount-tag">-4%</div>
+                                <div v-if="product.discount > 0" class="discount-tag">-{{ product.discount }}%</div>
                             </div>
                         </router-link>
                         <div class="product-content">
                             <h3>{{ product.name }}</h3>
+                            <div class="rating" v-if="product.average_rating">
+                                <span class="stars">
+                                    <span v-for="i in 5" :key="i" :class="['star', i <= Math.round(product.average_rating) ? 'filled' : '']">★</span>
+                                </span>
+                                <span class="rating-value">{{ product.average_rating ? product.average_rating.toFixed(1) : '0.0' }}</span>
+                            </div>
                             <div class="price-container">
-                                <p class="old-price"><s>{{ (product.price / 0.96).toFixed(2) }} ₽</s></p>
-                                <p class="price">{{ product.price }} ₽</p>
+                                <p v-if="product.discount > 0" class="old-price"><s>{{ product.price }} ₽</s></p>
+                                <p class="price">{{ product.discounted_price }} ₽</p>
                             </div>
                             <div class="availability" :class="{ 'out-of-stock': !product.is_available }">
                                 <span>{{ product.is_available ? 'В наличии' : 'Нет в наличии' }}</span>
@@ -153,11 +305,48 @@ const categoriesSwiperInstance = ref(null);
 const productsSwiperInstance = ref(null);
 const toast = ref(null);
 const currentUser = ref(null);
+const slidesPerView = ref({
+    categories: 5,
+    products: 4
+});
+
+// Добавляем переменные для новых секций
+const popularProducts = ref([]);
+const newProducts = ref([]);
+const popularSwiperInstance = ref(null);
+const newProductsSwiperInstance = ref(null);
+
+// Функция обновления slidesPerView в зависимости от размера экрана
+const updateSlidesPerView = () => {
+    const width = window.innerWidth;
+    if (width < 480) {
+        slidesPerView.value.categories = 1;
+        slidesPerView.value.products = 1;
+    } else if (width < 768) {
+        slidesPerView.value.categories = 2;
+        slidesPerView.value.products = 2;
+    } else if (width < 992) {
+        slidesPerView.value.categories = 3;
+        slidesPerView.value.products = 3;
+    } else {
+        slidesPerView.value.categories = 5;
+        slidesPerView.value.products = 4;
+    }
+};
 
 onMounted(async () => {
     await loadCurrentUser();
     await loadData();
+    
+    // Вызываем функцию обновления при загрузке страницы
+    updateSlidesPerView();
+    
+    // Слушаем изменение размера окна
+    window.addEventListener('resize', updateSlidesPerView);
 });
+
+// Очистка слушателя при размонтировании компонента
+
 
 const loadCurrentUser = async () => {
     try {
@@ -179,30 +368,58 @@ const loadData = async () => {
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-        const [categoriesResponse, productsResponse, wishlistResponse, cartResponse] = await Promise.all([
+        // Базовые запросы на данные всегда выполняются
+        const [categoriesResponse, productsResponse, popularProductsResponse, newProductsResponse] = await Promise.all([
             axios.get(`${API_BASE_URL}/main/categories/`, { headers }),
             axios.get(`${API_BASE_URL}/main/products/`, { headers }),
-            token ? axios.get(`${API_BASE_URL}/main/wishlist/check/`, { headers }) : Promise.resolve({ data: [] }),
-            token ? axios.get(`${API_BASE_URL}/main/cart/`, { headers }) : Promise.resolve({ data: [] })
+            axios.get(`${API_BASE_URL}/main/products/popular/`, { headers }),
+            axios.get(`${API_BASE_URL}/main/products/new/`, { headers })
         ]);
 
         categories.value = categoriesResponse.data;
         products.value = productsResponse.data;
-        wishlist.value = wishlistResponse.data.wishlist || [];
-
-        const cartData = cartResponse.data;
-        if (Array.isArray(cartData)) {
-            cartData.forEach(item => {
-                cartItems.value[item.product.id] = item.quantity;
-            });
-        } else if (cartData && cartData.items && Array.isArray(cartData.items)) {
-            cartData.items.forEach(item => {
-                cartItems.value[item.product.id] = item.quantity;
-            });
+        
+        // Используем данные из новых API-эндпоинтов
+        popularProducts.value = popularProductsResponse.data;
+        newProducts.value = newProductsResponse.data;
+        
+        // Запросы, зависящие от авторизации
+        if (token) {
+            try {
+                // Загрузка списка желаемого
+                const wishlistResponse = await axios.get(`${API_BASE_URL}/main/wishlist/check/`, { headers });
+                wishlist.value = wishlistResponse.data.wishlist || [];
+                
+                // Загрузка корзины
+                const cartResponse = await axios.get(`${API_BASE_URL}/main/cart/`, { headers });
+                const cartData = cartResponse.data;
+                
+                // Обработка данных корзины
+                if (Array.isArray(cartData)) {
+                    cartData.forEach(item => {
+                        cartItems.value[item.product.id] = item.quantity;
+                    });
+                } else if (cartData && cartData.items && Array.isArray(cartData.items)) {
+                    cartData.items.forEach(item => {
+                        cartItems.value[item.product.id] = item.quantity;
+                    });
+                }
+            } catch (authError) {
+                console.error('Ошибка загрузки данных для авторизованного пользователя:', authError);
+                // Сбрасываем токен, если он недействителен
+                if (authError.response && authError.response.status === 401) {
+                    localStorage.removeItem('token');
+                    toast.value.showToast('Сессия истекла, пожалуйста, войдите снова', 'warning');
+                }
+            }
+        } else {
+            // Если пользователь не авторизован, сбрасываем данные
+            wishlist.value = [];
+            cartItems.value = {};
         }
     } catch (error) {
         console.error('Ошибка загрузки данных:', error.response ? error.response.data : error.message);
-        toast.value.showToast('Ошибка при загрузке данных. Проверьте консоль.', 'error');
+        toast.value.showToast('Ошибка при загрузке данных. Попробуйте позже.', 'error');
     }
 };
 
@@ -220,6 +437,14 @@ const onProductsSwiper = (swiper) => {
 
 const onSlideChange = () => {
     console.log('Слайд изменен', swiperInstance.value.activeIndex);
+};
+
+const onPopularSwiper = (swiper) => {
+    popularSwiperInstance.value = swiper;
+};
+
+const onNewProductsSwiper = (swiper) => {
+    newProductsSwiperInstance.value = swiper;
 };
 
 const isInWishlist = computed(() => (productId) => {
@@ -343,6 +568,8 @@ const decreaseQuantity = async (product) => {
     padding: 20px;
     font-family: 'Arial', sans-serif;
     background-color: #f5f5f5;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .swiper-container {
@@ -445,6 +672,52 @@ const decreaseQuantity = async (product) => {
     background: #e2e8f0;
 }
 
+.advantages-section {
+    margin-bottom: 40px;
+}
+
+.advantages-container {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 20px 0;
+    flex-wrap: wrap;
+}
+
+.advantage-card {
+    background: linear-gradient(135deg, #ffffff, #f9f9f9);
+    border-radius: 16px;
+    padding: 30px 20px;
+    box-shadow: 0 4px 12px rgba(107, 70, 193, 0.1);
+    transition: all 0.3s ease;
+    text-align: center;
+    flex: 1;
+    position: relative;
+}
+
+.advantage-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(107, 70, 193, 0.2);
+}
+
+.advantage-icon {
+    font-size: 36px;
+    margin-bottom: 15px;
+}
+
+.advantage-card h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 10px;
+}
+
+.advantage-card p {
+    font-size: 14px;
+    color: #7f8c8d;
+    margin: 0;
+}
+
 .categories-container, .products-container {
     position: relative;
     margin-bottom: 40px;
@@ -502,6 +775,8 @@ const decreaseQuantity = async (product) => {
 
 .categories-swiper, .products-swiper {
     padding: 20px 0;
+    display: flex;
+    flex-direction: row;
 }
 
 .category-card {
@@ -607,11 +882,8 @@ const decreaseQuantity = async (product) => {
     flex-direction: column;
     justify-content: space-between;
     padding: 0;
-}
-
-.product-card:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    height: 100%;
+    position: relative;
 }
 
 .image-wrapper {
@@ -628,21 +900,13 @@ const decreaseQuantity = async (product) => {
     transition: transform 0.3s ease;
 }
 
-.product-card:hover .product-image {
-    transform: scale(1.05);
+.product-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
 }
 
-.discount-tag {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    background: linear-gradient(135deg, #ffd700, #ffcc00);
-    color: #1a1a1a;
-    padding: 5px 12px;
-    border-radius: 12px;
-    font-size: 14px;
-    font-weight: 600;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+.product-card:hover .product-image {
+    transform: scale(1.05);
 }
 
 .product-content {
@@ -820,5 +1084,231 @@ const decreaseQuantity = async (product) => {
     background: #fff;
     border-radius: 12px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+/* Адаптивные стили для мобильных устройств */
+@media (max-width: 992px) {
+    .home-title {
+        font-size: 28px;
+        margin: 30px 0 20px;
+    }
+    
+    .nav-button {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .prev-button {
+        left: -10px;
+    }
+    
+    .next-button {
+        right: -10px;
+    }
+}
+
+@media (max-width: 768px) {
+    .home-container {
+        padding: 15px;
+    }
+    
+    .promo-banner {
+        flex-direction: column;
+        padding: 15px;
+        text-align: center;
+        min-height: auto;
+    }
+    
+    .promo-text {
+        order: 1;
+        margin-bottom: 15px;
+    }
+    
+    .promo-image {
+        order: 2;
+        margin: 0 0 15px 0;
+    }
+    
+    .nav-arrow {
+        display: none;
+    }
+    
+    .home-title {
+        font-size: 24px;
+        margin: 25px 0 20px;
+    }
+    
+    .home-title::after {
+        width: 50px;
+        height: 3px;
+    }
+    
+    .home-title::before {
+        width: 100px;
+    }
+    
+    .category-card {
+        height: 180px;
+    }
+    
+    .category-name {
+        font-size: 18px;
+    }
+    
+    .product-card h3 {
+        font-size: 16px;
+    }
+    
+    .price {
+        font-size: 20px;
+    }
+    
+    .old-price {
+        font-size: 12px;
+    }
+    
+    .button-group {
+        padding: 10px;
+    }
+    
+    .add-to-cart-button, .wishlist-button {
+        padding: 8px;
+        font-size: 13px;
+    }
+    
+    .quantity-button {
+        width: 26px;
+        height: 26px;
+        font-size: 14px;
+    }
+    
+    .advantages-container {
+        flex-direction: column;
+    }
+    
+    .advantage-card {
+        margin-bottom: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .home-container {
+        padding: 10px;
+    }
+    
+    .discount {
+        font-size: 18px;
+    }
+    
+    .promo-image {
+        width: 120px;
+    }
+    
+    .home-title {
+        font-size: 20px;
+        margin: 20px 0 15px;
+        letter-spacing: 1px;
+    }
+    
+    .categories-container, .products-container {
+        margin-bottom: 25px;
+    }
+    
+    .category-card {
+        height: 160px;
+    }
+    
+    .category-name {
+        font-size: 16px;
+        bottom: 10px;
+        left: 10px;
+    }
+    
+    .image-wrapper {
+        height: 160px;
+    }
+    
+    .product-content {
+        padding: 10px;
+    }
+    
+    .button-group {
+        gap: 5px;
+    }
+    
+    .wishlist-button {
+        padding: 8px;
+    }
+    
+    .heart-icon {
+        font-size: 16px;
+    }
+    
+    .no-data {
+        font-size: 16px;
+        padding: 15px;
+    }
+}
+
+.bestseller-badge, .new-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 6px 12px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    z-index: 5;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.bestseller-badge {
+    background: linear-gradient(135deg, #ff7700, #ff9900);
+    color: white;
+}
+
+.new-badge {
+    background: linear-gradient(135deg, #6b46c1, #9f7aea);
+    color: white;
+}
+
+.discount-tag {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: linear-gradient(135deg, #ffd700, #ffcc00);
+    color: #1a1a1a;
+    padding: 5px 12px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.rating {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 5px;
+}
+
+.stars {
+    display: inline-flex;
+    margin-right: 5px;
+}
+
+.star {
+    color: #ccc;
+    font-size: 18px;
+}
+
+.star.filled {
+    color: #ffc107;
+}
+
+.rating-value {
+    font-size: 14px;
+    color: #666;
+    font-weight: 500;
 }
 </style>
