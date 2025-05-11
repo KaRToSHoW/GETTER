@@ -7,8 +7,10 @@
             <h2 class="product-title">{{ product.name }}</h2>
             <div v-if="currentUser && currentUser.is_superuser" class="admin-panel">
                 <span class="admin-badge">Администратор</span>
+                <div class="admin-buttons">
                 <button @click="editProduct" class="admin-button edit">Редактировать</button>
                 <button @click="deleteProduct" class="admin-button delete">Удалить</button>
+                </div>
             </div>
         </div>
         <div class="product-content">
@@ -17,8 +19,8 @@
             </div>
             <div class="product-details">
                 <div class="price-section">
-                    <p class="old-price"><s>{{ (product.price / 0.96).toFixed(2) }} ₽</s></p>
-                    <p class="product-price">{{ product.price }} ₽</p>
+                    <p v-if="product.discount > 0" class="old-price"><s>{{ product.price }} ₽</s></p>
+                    <p class="product-price">{{ product.discounted_price }} ₽</p>
                     <div class="availability" :class="{ 'out-of-stock': !product.is_available }">
                         <span>{{ product.is_available ? 'В наличии' : 'Нет в наличии' }}</span>
                         <span class="stock">Осталось: {{ product.stock }} шт.</span>
@@ -36,32 +38,55 @@
                         </ul>
                     </div>
 
-                </div>
-                <div class="button-group">
-                    <div v-if="cartItems[product.id]" class="quantity-controls">
-                        <button @click="decreaseQuantity(product)" class="quantity-button">-</button>
-                        <span class="quantity">{{ cartItems[product.id] }}</span>
-                        <button @click="increaseQuantity(product)" class="quantity-button">+</button>
+                    <div class="documentation-section" v-if="product.documentation || currentUser?.is_superuser">
+                        <h4>Документация:</h4>
+                        <div v-if="product.documentation" class="documentation-link">
+                            <a :href="product.documentation" target="_blank" class="download-doc">
+                                Скачать документацию
+                            </a>
+                        </div>
+                        <div v-if="currentUser?.is_superuser" class="upload-doc">
+                            <input 
+                                type="file" 
+                                @change="handleDocumentUpload" 
+                                accept=".pdf,.doc,.docx"
+                                id="documentUpload"
+                                class="file-input"
+                            />
+                            <label for="documentUpload" class="upload-label">
+                                {{ product.documentation ? 'Изменить документацию' : 'Загрузить документацию' }}
+                            </label>
+                        </div>
                     </div>
-                    <button v-else @click="addToCart(product)" class="add-to-cart-button"
-                        :disabled="!product.is_available">
-                        {{ product.is_available ? 'В корзину' : 'Недоступно' }}
-                    </button>
-                    <button :class="['wishlist-button', { 'active': isInWishlist(product.id) }]"
-                        @click="toggleWishlist(product)">
-                        <span class="heart-icon">❤️</span>
-                    </button>
+                    <div class="button-group">
+                        <div v-if="cartItems[product.id]" class="quantity-controls">
+                            <button @click="decreaseQuantity(product)" class="quantity-button">-</button>
+                            <span class="quantity">{{ cartItems[product.id] }}</span>
+                            <button @click="increaseQuantity(product)" class="quantity-button">+</button>
+                        </div>
+                        <button v-else @click="addToCart(product)" class="add-to-cart-button"
+                            :disabled="!product.is_available">
+                            {{ product.is_available ? 'В корзину' : 'Недоступно' }}
+                        </button>
+                        <button :class="['wishlist-button', { 'active': isInWishlist(product.id) }]"
+                            @click="toggleWishlist(product)">
+                            <span class="heart-icon">❤️</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
         <div class="reviews-section">
             <div class="reviews-header">
-                <h3 class="reviews-title">{{ reviews.length }} отзывов</h3>
+                <h3 class="reviews-title">{{ reviews.length }} {{ getReviewsCountText(reviews.length) }}</h3>
                 <div class="rating-summary">
                     <span class="rating-number">{{ averageRating.toFixed(1) }}</span>
                     <div class="stars">
                         <span v-for="i in 5" :key="i"
-                            :class="['star', i <= Math.round(averageRating) ? 'filled' : '']">★</span>
+                            :class="['star', i <= Math.round(averageRating) ? 'filled' : '']">
+                            <span v-if="i <= Math.round(averageRating)">★</span>
+                            <span v-else>☆</span>
+                        </span>
                     </div>
                 </div>
             </div>
@@ -93,11 +118,14 @@
                 <div class="filter-group">
                     <label>Фильтр по оценке:</label>
                     <div class="rating-filter">
+                        <span class="filter-label">Фильтр по рейтингу:</span>
+                        <div class="rating-buttons">
                         <button v-for="rating in 5" :key="rating"
                             :class="['rating-filter-btn', { active: selectedRating === rating }]"
                             @click="toggleRatingFilter(rating)">
                             {{ rating }}★
                         </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -105,10 +133,10 @@
             <div v-if="filteredReviews.length > 0" class="reviews-list">
                 <div v-for="review in filteredReviews" :key="review.id" class="review-item">
                     <div class="review-header">
-                        <img :src="review.user.profile_image_url ? `${API_BASE_URL}${review.user.profile_image_url}` : defaultImage"
+                        <img :src="review.user && review.user.profile_image_url ? `${API_BASE_URL}${review.user.profile_image_url}` : defaultImage"
                             alt="User avatar" class="user-avatar">
                         <div class="review-info">
-                            <div class="user-name">{{ review.user.username }}</div>
+                            <div class="user-name">{{ review.user ? review.user.username : 'Пользователь' }}</div>
                             <div class="review-date">{{ formatDate(review.created_at) }}</div>
                         </div>
                         <button 
@@ -128,7 +156,10 @@
                     </div>
                     <div class="review-rating">
                         <div class="stars">
-                            <span v-for="i in 5" :key="i" :class="['star', i <= review.rating ? 'filled' : '']">★</span>
+                            <span v-for="i in 5" :key="i" :class="['star', i <= review.rating ? 'filled' : '']">
+                                <span v-if="i <= review.rating">★</span>
+                                <span v-else>☆</span>
+                            </span>
                         </div>
                     </div>
                     <div class="review-content">
@@ -179,6 +210,10 @@
                     <div class="form-group">
                         <label>Цена:</label>
                         <input v-model.number="editingProduct.price" type="number" min="0" step="0.01" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Скидка (%):</label>
+                        <input v-model.number="editingProduct.discount" type="number" min="0" max="100" />
                     </div>
                     <div class="form-group">
                         <label>Количество на складе:</label>
@@ -269,13 +304,26 @@ const loadProductData = async () => {
 
         const [productResponse, reviewsResponse, wishlistResponse, cartResponse] = await Promise.all([
             axios.get(`${API_BASE_URL}/main/products/${route.params.id}/`, { headers }),
-            axios.get(`${API_BASE_URL}/main/products/${route.params.id}/reviews/`, { headers }).catch(() => ({ data: [] })),
+            axios.get(`${API_BASE_URL}/main/products/${route.params.id}/reviews/`, { headers })
+                .catch(error => {
+                    console.error('Ошибка загрузки отзывов:', error);
+                    return { data: [] };
+                }),
             token ? axios.get(`${API_BASE_URL}/main/wishlist/check/`, { headers }) : Promise.resolve({ data: [] }),
             token ? axios.get(`${API_BASE_URL}/main/cart/`, { headers }) : Promise.resolve({ data: [] })
         ]);
 
         product.value = productResponse.data;
-        reviews.value = reviewsResponse.data || [];
+        
+        // Проверяем, что отзывы имеют правильный формат
+        if (Array.isArray(reviewsResponse.data)) {
+            reviews.value = reviewsResponse.data;
+            console.log('Загружено отзывов:', reviews.value.length);
+        } else {
+            console.error('Ошибка: отзывы не являются массивом:', reviewsResponse.data);
+            reviews.value = [];
+        }
+        
         wishlist.value = wishlistResponse.data.wishlist || [];
 
         const cartData = cartResponse.data;
@@ -290,6 +338,18 @@ const loadProductData = async () => {
         }
 
         console.log('Загруженный продукт:', product.value);
+        console.log('Загруженные отзывы:', JSON.stringify(reviews.value));
+        
+        // Отладочная информация о структуре отзывов
+        if (reviews.value.length > 0) {
+            console.log('Образец отзыва:', reviews.value[0]);
+            console.log('Поля отзыва:');
+            for (const key in reviews.value[0]) {
+                console.log(`  ${key}: ${typeof reviews.value[0][key]}`);
+            }
+        } else {
+            console.log('Отзывов нет или они не загрузились');
+        }
     } catch (error) {
         console.error('Ошибка загрузки данных товара:', error.response ? error.response.data : error.message);
         toast.value.showToast('Ошибка при загрузке данных товара. Проверьте консоль.', 'error');
@@ -427,9 +487,41 @@ const averageRating = computed(() => {
     return sum / reviews.value.length;
 });
 
+// Функция для склонения слова "отзыв" в зависимости от числа
+const getReviewsCountText = (count) => {
+    const lastDigit = count % 10;
+    const lastTwoDigits = count % 100;
+    
+    if (lastTwoDigits >= 11 && lastTwoDigits <= 19) {
+        return 'отзывов';
+    }
+    
+    if (lastDigit === 1) {
+        return 'отзыв';
+    }
+    
+    if (lastDigit >= 2 && lastDigit <= 4) {
+        return 'отзыва';
+    }
+    
+    return 'отзывов';
+};
+
 // Фильтрация и сортировка отзывов
 const filteredReviews = computed(() => {
-    let filtered = [...reviews.value];
+    // Проверяем, что reviews - это массив
+    if (!Array.isArray(reviews.value)) {
+        console.error('reviews is not an array:', reviews.value);
+        return [];
+    }
+    
+    // Фильтруем только корректные отзывы, у которых есть id и rating
+    let filtered = reviews.value.filter(review => review && review.id && typeof review.rating !== 'undefined');
+    
+    // Выводим сообщение, если отфильтровали какие-то отзывы
+    if (filtered.length !== reviews.value.length) {
+        console.warn(`Отфильтровано ${reviews.value.length - filtered.length} некорректных отзывов`);
+    }
 
     // Фильтрация по рейтингу
     if (selectedRating.value) {
@@ -439,16 +531,16 @@ const filteredReviews = computed(() => {
     // Сортировка
     switch (sortBy.value) {
         case 'date-new':
-            filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            filtered.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
             break;
         case 'date-old':
-            filtered.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+            filtered.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
             break;
         case 'rating-high':
-            filtered.sort((a, b) => b.rating - a.rating);
+            filtered.sort((a, b) => (b.rating || 0) - (a.rating || 0));
             break;
         case 'rating-low':
-            filtered.sort((a, b) => a.rating - b.rating);
+            filtered.sort((a, b) => (a.rating || 0) - (b.rating || 0));
             break;
     }
 
@@ -515,6 +607,7 @@ const loadCurrentUser = async () => {
 // Функция для проверки прав на удаление отзыва
 const canDeleteReview = (review) => {
     if (!currentUser.value) return false;
+    if (!review || !review.user) return false;
     
     // Админ может удалять любые отзывы
     if (currentUser.value.is_superuser) return true;
@@ -608,6 +701,7 @@ const deleteProduct = async () => {
 // Функция для определения, может ли пользователь редактировать отзыв
 const canEditReview = (review) => {
     if (!currentUser.value) return false;
+    if (!review || !review.user) return false;
     
     // Пользователь может редактировать только свои отзывы
     return review.user.id === currentUser.value.id;
@@ -687,6 +781,7 @@ const saveEditedProduct = async () => {
         formData.append('sku', editingProduct.value.sku);
         formData.append('description', editingProduct.value.description || '');
         formData.append('price', editingProduct.value.price);
+        formData.append('discount', editingProduct.value.discount || 0);
         formData.append('stock', editingProduct.value.stock);
         formData.append('is_available', editingProduct.value.is_available);
 
@@ -730,6 +825,35 @@ const handleProductImageUpload = (event) => {
         editingProduct.value.image = file;
     }
 };
+
+// Функция для загрузки документации
+const handleDocumentUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+        const formData = new FormData();
+        formData.append('documentation', file);
+        const token = localStorage.getItem('token');
+
+        const response = await axios.patch(
+            `${API_BASE_URL}/main/products/${product.value.id}/`,
+            formData,
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data'
+                }
+            }
+        );
+
+        product.value = response.data;
+        toast.value?.showToast('Документация успешно обновлена', 'success');
+    } catch (error) {
+        console.error('Ошибка загрузки документации:', error);
+        toast.value?.showToast('Ошибка при загрузке документации', 'error');
+    }
+};
 </script>
 
 <style scoped>
@@ -745,42 +869,30 @@ const handleProductImageUpload = (event) => {
 .product-header {
     display: flex;
     align-items: center;
-    gap: 24px;
-    margin-bottom: 40px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid #e5e5e5;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+    gap: 15px;
 }
 
 .back-button {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #666;
-    font-size: 15px;
-    font-weight: 500;
-    text-decoration: none;
-    transition: color 0.2s;
-    background: none;
+    padding: 8px 15px;
+    background-color: #f0f0f0;
     border: none;
+    border-radius: 4px;
     cursor: pointer;
-    padding: 0;
-}
-
-.back-button:before {
-    content: "←";
-    font-size: 18px;
+    font-size: 14px;
+    transition: background-color 0.2s;
 }
 
 .back-button:hover {
-    color: #000;
+    background-color: #e0e0e0;
 }
 
 .product-title {
-    font-size: 32px;
-    color: #1d1d1f;
     margin: 0;
-    font-weight: 600;
-    letter-spacing: -0.5px;
+    flex-grow: 1;
+    font-size: 24px;
+    color: #333;
 }
 
 .product-content {
@@ -1273,23 +1385,40 @@ const handleProductImageUpload = (event) => {
 
 .rating-filter {
     display: flex;
-    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 15px;
+    gap: 10px;
+}
+
+.filter-label {
+    font-weight: 500;
+    margin-right: 5px;
+}
+
+.rating-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
 }
 
 .rating-filter-btn {
-    padding: 6px 12px;
-    border: 1px solid #d2d2d7;
-    border-radius: 8px;
-    background: white;
-    color: #1d1d1f;
+    background-color: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 6px 10px;
     cursor: pointer;
     transition: all 0.2s;
 }
 
+.rating-filter-btn:hover {
+    background-color: #e0e0e0;
+}
+
 .rating-filter-btn.active {
-    background: #8b5cf6;
+    background-color: #6b46c1;
     color: white;
-    border-color: #8b5cf6;
+    border-color: #6b46c1;
 }
 
 .review-fields {
@@ -1336,6 +1465,67 @@ const handleProductImageUpload = (event) => {
     background-color: #ff0000;
 }
 
+.documentation-section {
+    margin-top: 20px;
+    padding: 16px;
+    background: #f5f5f7;
+    border-radius: 12px;
+}
+
+.documentation-section h4 {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    color: #1d1d1f;
+}
+
+.documentation-link {
+    margin-bottom: 12px;
+}
+
+.download-doc {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 16px;
+    background: #0071e3;
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: background-color 0.3s;
+}
+
+.download-doc:hover {
+    background: #0077ed;
+}
+
+.upload-doc {
+    position: relative;
+}
+
+.file-input {
+    position: absolute;
+    width: 0.1px;
+    height: 0.1px;
+    opacity: 0;
+    overflow: hidden;
+    z-index: -1;
+}
+
+.upload-label {
+    display: inline-block;
+    padding: 8px 16px;
+    background: #86868b;
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+}
+
+.upload-label:hover {
+    background: #6e6e73;
+}
+
 @media (max-width: 1200px) {
     .product-content {
         grid-template-columns: 1fr;
@@ -1374,6 +1564,36 @@ const handleProductImageUpload = (event) => {
     .product-price {
         font-size: 36px;
     }
+
+    .product-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .back-button {
+        padding: 6px 12px;
+        font-size: 13px;
+    }
+    
+    .product-title {
+        font-size: 20px;
+        width: 100%;
+    }
+    
+    .admin-panel {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .rating-filter {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .filter-label {
+        margin-bottom: 5px;
+    }
 }
 
 @media (max-width: 480px) {
@@ -1389,45 +1609,68 @@ const handleProductImageUpload = (event) => {
         width: 100%;
         justify-content: space-between;
     }
+
+    .admin-panel {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .admin-buttons {
+        width: 100%;
+    }
+    
+    .admin-button {
+        flex: 1;
+        text-align: center;
+    }
+    
+    .rating-buttons {
+        width: 100%;
+        justify-content: space-between;
+    }
 }
 
 .admin-panel {
     display: flex;
     align-items: center;
-    margin-left: auto;
+    flex-wrap: wrap;
     gap: 10px;
 }
 
 .admin-badge {
     background-color: #6b46c1;
     color: white;
-    padding: 5px 10px;
+    padding: 4px 8px;
     border-radius: 4px;
     font-size: 12px;
     font-weight: bold;
 }
 
+.admin-buttons {
+    display: flex;
+    gap: 8px;
+}
+
 .admin-button {
-    padding: 5px 10px;
+    padding: 6px 12px;
     border: none;
     border-radius: 4px;
-    font-size: 12px;
     cursor: pointer;
-    transition: background-color 0.3s;
+    font-size: 13px;
+    color: white;
+    transition: opacity 0.2s;
+}
+
+.admin-button:hover {
+    opacity: 0.9;
 }
 
 .admin-button.edit {
     background-color: #4caf50;
-    color: white;
 }
 
 .admin-button.delete {
     background-color: #f44336;
-    color: white;
-}
-
-.admin-button:hover {
-    opacity: 0.8;
 }
 
 /* Стили для кнопки редактирования отзыва */

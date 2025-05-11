@@ -24,7 +24,7 @@
                     </div>
                     <router-link :to="`/product/${product.id}`" class="product-link">
                         <div class="product-image">
-                            <img :src="`${$apiBaseUrl}${product.main_image}`" :alt="product.name">
+                            <img :src="`${$apiBaseUrl}${product.image}`" :alt="product.name">
                         </div>
                         <div class="product-info">
                             <h3 class="product-name">{{ product.name }}</h3>

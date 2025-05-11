@@ -5,7 +5,8 @@ from .views import (
     add_to_wishlist, remove_from_wishlist, check_wishlist, 
     get_cart, add_to_cart, remove_from_cart, ProductDetailView, 
     ReviewListCreateView, get_favorites, user_orders, 
-    popular_wishlist_products, user_activity
+    popular_wishlist_products, user_activity, advanced_product_search,
+    new_products, popular_products
 )
 
 urlpatterns = [
@@ -15,6 +16,8 @@ urlpatterns = [
     path('products/<int:product_id>/reviews/', ReviewListCreateView.as_view(), name='review-list-create'),
     path('products/<int:product_id>/reviews/<int:review_id>/', ReviewListCreateView.as_view(), name='review-detail'),
     path('products/popular-wishlist/', popular_wishlist_products, name='popular-wishlist-products'),
+    path('products/new/', new_products, name='new-products'),
+    path('products/popular/', popular_products, name='popular-products'),
     path('wishlist/add/', add_to_wishlist, name='add-to-wishlist'),
     path('wishlist/remove/<int:product_id>/', remove_from_wishlist, name='remove-from-wishlist'),
     path('wishlist/check/', check_wishlist, name='check-wishlist'),
@@ -27,4 +30,5 @@ urlpatterns = [
     path('user/<int:user_id>/activity/', user_activity, name='user-activity'),
     path('api/user-activity/<int:user_id>/', user_activity, name='user_activity'),
     path('api/user-activity/', user_activity, name='user_activity'),
+    path('products/search/advanced/', advanced_product_search, name='advanced-product-search'),
 ]

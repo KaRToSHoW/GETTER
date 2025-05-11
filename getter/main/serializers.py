@@ -27,22 +27,31 @@ class ProductSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
     category_id = serializers.IntegerField(write_only=True)
     image = serializers.ImageField(required=False, allow_null=True)
+    documentation = serializers.FileField(required=False, allow_null=True)
     url = serializers.SerializerMethodField()
     average_rating = serializers.FloatField(read_only=True, required=False)
-
+    discounted_price = serializers.SerializerMethodField()
+    
     class Meta:
         model = Product
-        fields = ['id', 'sku', 'name', 'description', 'price', 'stock', 'category', 'category_id', 'image', 'is_available', 'specifications', 'url', 'average_rating']
+        fields = ['id', 'sku', 'name', 'description', 'price', 'discount', 'discounted_price', 
+                 'stock', 'category', 'category_id', 'image', 'documentation', 'is_available', 
+                 'specifications', 'url', 'average_rating', 'creation_date']
 
     def get_url(self, obj):
         return obj.get_absolute_url()
+        
+    def get_discounted_price(self, obj):
+        return obj.get_discounted_price()
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
-        if instance.image:
-            request = self.context.get('request')
-            if request:
+        request = self.context.get('request')
+        if request:
+            if instance.image:
                 representation['image'] = request.build_absolute_uri(instance.image.url)
+            if instance.documentation:
+                representation['documentation'] = request.build_absolute_uri(instance.documentation.url)
         return representation
 
 class OrderItemSerializer(serializers.ModelSerializer):

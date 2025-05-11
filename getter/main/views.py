@@ -3,9 +3,11 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
+from django.db import models
+from django.db.models import Q, Avg, Count, Sum
 from .models import Category, Product, Wishlist, Order, OrderItem, Review
 from .serializers import CategorySerializer, ProductSerializer, OrderSerializer, OrderItemSerializer, ReviewSerializer, WishlistSerializer
-from django.db.models import Avg, Count, Sum
+from django.utils import timezone
 
 class CategoryListView(APIView):
     permission_classes = [AllowAny]
@@ -110,6 +112,21 @@ class ProductDetailView(APIView):
         except Product.DoesNotExist:
             return Response({'error': 'Продукт не найден'}, 
                           status=status.HTTP_404_NOT_FOUND)
+
+    def patch(self, request, pk):
+        if not request.user.is_superuser:
+            return Response({'error': 'Только администратор может редактировать товары'}, 
+                          status=status.HTTP_403_FORBIDDEN)
+        try:
+            product = Product.objects.get(id=pk)
+            serializer = ProductSerializer(product, data=request.data, partial=True, context={'request': request})
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Product.DoesNotExist:
+            return Response({'error': 'Продукт не найден'}, 
+                            status=status.HTTP_404_NOT_FOUND)
 
 class ReviewListCreateView(APIView):
     permission_classes = [IsAuthenticated]
@@ -435,3 +452,106 @@ def user_activity(request, user_id=None):
 
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def advanced_product_search(request):
+    """
+    Расширенный поиск и анализ товаров с поддержкой живого поиска
+    """
+    search_term = request.query_params.get('search', '').strip()
+    min_price = request.query_params.get('min_price')
+    max_price = request.query_params.get('max_price')
+    category = request.query_params.get('category')
+    
+    products = Product.objects.all()
+    
+    if search_term:
+        products = products.filter(
+            Q(name__icontains=search_term) |
+            Q(sku__contains=search_term) |
+            Q(category__name__icontains=search_term)
+        )
+    
+    if min_price:
+        products = products.filter(price__gte=float(min_price))
+    
+    if max_price:
+        products = products.filter(price__lte=float(max_price))
+    
+    if category:
+        products = products.filter(category__name__icontains=category)
+
+    # Добавляем аннотации и оптимизируем запрос
+    products = products.select_related('category').annotate(
+        average_rating=Avg('reviews__rating')
+    )
+
+    # Используем values() для оптимизации, если запрос из выпадающего списка
+    if request.query_params.get('dropdown') == 'true':
+        products = products.values(
+            'id', 'name', 'price', 'image', 
+            'category__name', 'is_available'
+        )[:5]  # Ограничиваем результаты для выпадающего списка
+        
+        # Форматируем результаты
+        results = [{
+            'id': p['id'],
+            'name': p['name'],
+            'price': p['price'],
+            'image': p['image'],
+            'category': {'name': p['category__name']},
+            'is_available': p['is_available']
+        } for p in products]
+        
+        return Response({
+            'products': results,
+            'total': products.count()
+        })
+
+    # Полная сериализация для страницы поиска
+    serializer = ProductSerializer(products, many=True, context={'request': request})
+    
+    return Response({
+        'products': serializer.data,
+        'total': products.count(),
+        'query': search_term
+    })
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def new_products(request):
+    """Получение новых товаров по дате создания"""
+    # Получаем текущую дату
+    current_date = timezone.now()
+    
+    # Определяем дату, которая была 30 дней назад
+    month_ago = current_date - timezone.timedelta(days=30)
+    
+    # Найдем все товары, созданные за последние 30 дней
+    new_products = Product.objects.filter(
+        creation_date__gte=month_ago
+    ).order_by('-creation_date')[:10]  # Сортируем по дате создания (от новых к старым)
+    
+    # Аннотируем средний рейтинг
+    new_products = new_products.annotate(
+        average_rating=Avg('reviews__rating')
+    )
+    
+    serializer = ProductSerializer(new_products, many=True, context={'request': request})
+    return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def popular_products(request):
+    """Получение популярных товаров по количеству отзывов и рейтингу"""
+    # Находим товары с наибольшим количеством отзывов и высоким рейтингом
+    popular_products = Product.objects.annotate(
+        reviews_count=Count('reviews'),
+        average_rating=Avg('reviews__rating')
+    ).filter(
+        reviews_count__gt=0  # Только товары с отзывами
+    ).order_by('-reviews_count', '-average_rating')[:10]
+    
+    serializer = ProductSerializer(popular_products, many=True, context={'request': request})
+    return Response(serializer.data)

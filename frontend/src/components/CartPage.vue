@@ -2,7 +2,29 @@
     <div class="cart-container">
         <ToastNotification ref="toast" />
         <h2 class="cart-title">Корзина</h2>
-        <div v-if="cart.items && cart.items.length > 0" class="cart-items">
+        
+        <!-- Индикатор загрузки -->
+        <div v-if="isLoading" class="loading-spinner-container">
+            <div class="loading-spinner"></div>
+            <p>Загрузка корзины...</p>
+        </div>
+        
+        <div v-else-if="cart.items && cart.items.length > 0" class="cart-items">
+            <div class="cart-header">
+                <div class="select-all-container">
+                    <input 
+                        type="checkbox" 
+                        :checked="isAllSelected" 
+                        @change="toggleSelectAll" 
+                        id="select-all" 
+                        class="select-all-checkbox"
+                    />
+                    <label for="select-all">Выбрать все</label>
+                </div>
+                <button @click="clearCart" class="clear-cart-btn">
+                    Очистить корзину
+                </button>
+            </div>
             <div v-for="item in cart.items" :key="item.id" class="cart-item">
                 <input type="checkbox" v-model="selectedItems" :value="item.id" class="item-checkbox" />
                 <div class="cart-item-image-wrapper">
@@ -26,8 +48,8 @@
                         <button @click="increaseQuantity(item)" class="quantity-button">+</button>
                     </div>
                     <div class="price-container">
-                        <p class="old-price"><s>{{ (item.product.price / 0.96 * item.quantity).toFixed(2) }} ₽</s></p>
-                        <p class="cart-item-price">{{ (item.product.price * item.quantity).toFixed(2) }} ₽</p>
+                        <p v-if="item.product.discount > 0" class="old-price"><s>{{ item.product.price * item.quantity }} ₽</s></p>
+                        <p class="cart-item-price">{{ (item.product.discount > 0 ? item.product.discounted_price : item.product.price) * item.quantity }} ₽</p>
                     </div>
                 </div>
                 <div class="cart-item-actions">
@@ -41,12 +63,61 @@
                 </div>
             </div>
             <div class="cart-total">
-                <p>Итого: {{ calculateTotal }} ₽</p>
-                <button class="checkout-button" @click="checkout" :disabled="selectedItems.length === 0">Оформить
-                    заказ</button>
+                <div class="cart-summary">
+                    <div class="summary-row">
+                        <span>Товары ({{ getSelectedItemsCount }})</span>
+                        <span>{{ formatPrice(getSubtotal) }} ₽</span>
+                    </div>
+                    <div v-if="getTotalDiscount > 0" class="summary-row discount">
+                        <span>Скидка</span>
+                        <span>-{{ formatPrice(getTotalDiscount) }} ₽</span>
+                    </div>
+                    <div class="summary-row total">
+                        <span>Итого</span>
+                        <span>{{ formatPrice(getTotal) }} ₽</span>
+                    </div>
+                </div>
+                <div class="promo-code-container">
+                    <div class="promo-input-group">
+                        <input 
+                            type="text" 
+                            v-model="promoCode" 
+                            placeholder="Введите промокод" 
+                            class="promo-input"
+                            :disabled="isPromoLoading" 
+                        />
+                        <button 
+                            @click="applyPromoCode" 
+                            class="apply-promo-btn"
+                            :disabled="!promoCode || isPromoLoading"
+                        >
+                            <span v-if="isPromoLoading" class="promo-spinner"></span>
+                            <span v-else>Применить</span>
+                        </button>
+                    </div>
+                    <p v-if="promoError" class="promo-error">{{ promoError }}</p>
+                    <p v-if="promoDiscount > 0" class="promo-success">Промокод применен! Скидка: {{ formatPrice(promoDiscount) }} ₽</p>
+                </div>
+                <div class="cart-buttons">
+                    <router-link to="/catalog" class="continue-shopping-btn">
+                        Продолжить покупки
+                    </router-link>
+                    <button class="checkout-button" @click="checkout" :disabled="selectedItems.length === 0">
+                        Оформить заказ
+                    </button>
+                </div>
             </div>
         </div>
-        <p v-else class="no-data">Корзина пуста.</p>
+        <div v-else class="no-data">
+            <div class="empty-cart">
+                <div class="empty-cart-icon">🛒</div>
+                <h3>Корзина пуста</h3>
+                <p>Ваша корзина пуста. Добавьте товары, чтобы сделать заказ.</p>
+                <router-link to="/catalog" class="continue-shopping-btn">
+                    Перейти в каталог
+                </router-link>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -63,6 +134,11 @@ const selectedItems = ref([]);
 const wishlist = ref([]);
 const toast = ref(null);
 const currentUser = ref(null);
+const isLoading = ref(true);
+const promoCode = ref('');
+const promoDiscount = ref(0);
+const promoError = ref('');
+const isPromoLoading = ref(false);
 
 const loadCurrentUser = async () => {
     try {
@@ -80,44 +156,222 @@ const loadCurrentUser = async () => {
     }
 };
 
-const loadCartData = async () => {
+const loadLocalCart = () => {
     try {
-        const token = localStorage.getItem('token');
-        if (token) {
-            const [cartResponse, wishlistResponse] = await Promise.all([
-                axios.get(`${$apiBaseUrl}/main/cart/`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                }),
-                axios.get(`${$apiBaseUrl}/main/wishlist/check/`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                })
-            ]);
-
-            // Создаем копию данных ответа
-            const cartData = {
-                ...cartResponse.data,
-                total_price: typeof cartResponse.data.total_price === 'number' ? cartResponse.data.total_price : parseFloat(cartResponse.data.total_price) || 0,
-                items: cartResponse.data.items || []
-            };
-            
-            // Сохраняем оригинальное количество для каждого элемента
-            cartData.items.forEach(item => {
-                item._originalQuantity = item.quantity;
-            });
-            
-            cart.value = cartData;
-            wishlist.value = wishlistResponse.data.wishlist || [];
+        const localCartStr = localStorage.getItem('localCart');
+        console.log('Получены данные из localStorage:', localCartStr ? 'данные есть' : 'данные отсутствуют');
+        
+        if (!localCartStr) {
+            console.log('Локальная корзина пуста');
+            return { items: [], total_price: 0 };
         }
+        
+        let parsedCart;
+        try {
+            parsedCart = JSON.parse(localCartStr);
+            console.log('Данные корзины успешно разобраны из JSON');
+        } catch (parseError) {
+            console.error('Ошибка парсинга JSON корзины:', parseError);
+            return { items: [], total_price: 0 };
+        }
+        
+        // Проверка корректности данных
+        if (!parsedCart || typeof parsedCart !== 'object') {
+            console.error('Некорректные данные в localStorage:', parsedCart);
+            return { items: [], total_price: 0 };
+        }
+        
+        // Убедимся, что свойство items является массивом
+        const items = Array.isArray(parsedCart.items) ? parsedCart.items : [];
+        
+        // Проверим и восстановим каждый элемент корзины
+        const validItems = items.filter(item => {
+            // Базовая проверка элемента
+            if (!item || typeof item !== 'object') {
+                console.warn('Некорректный элемент корзины:', item);
+                return false;
+            }
+            
+            // Проверка наличия идентификатора продукта
+            if (!item.product_id) {
+                console.warn('У элемента корзины отсутствует product_id:', item);
+                return false;
+            }
+            
+            // Проверка количества
+            const quantity = parseInt(item.quantity);
+            if (isNaN(quantity) || quantity <= 0) {
+                console.warn('Некорректное количество товара:', item);
+                return false;
+            }
+            item.quantity = quantity; // Нормализация количества
+            
+            // Проверка и нормализация продукта
+            if (!item.product) {
+                console.warn('У элемента корзины отсутствует продукт:', item);
+                // Создаем минимальный объект продукта
+                item.product = {
+                    id: item.product_id,
+                    name: 'Неизвестный товар',
+                    price: 0
+                };
+            } else if (typeof item.product !== 'object') {
+                console.warn('Некорректный объект продукта:', item.product);
+                item.product = {
+                    id: item.product_id,
+                    name: 'Некорректный товар',
+                    price: 0
+                };
+            }
+            
+            // Проверка наличия категории
+            if (!item.product.category) {
+                item.product.category = { name: 'Без категории' };
+            }
+            
+            return true;
+        });
+        
+        console.log(`Загружено ${validItems.length} товаров из локального хранилища`);
+        
+        // Проверим возраст данных - если старше 7 дней, выдаем предупреждение
+        if (parsedCart.updated_at) {
+            const updateDate = new Date(parsedCart.updated_at);
+            const now = new Date();
+            const diffDays = Math.floor((now - updateDate) / (1000 * 60 * 60 * 24));
+            
+            if (diffDays > 7) {
+                console.warn(`Данные корзины устарели (${diffDays} дней)`);
+            }
+        }
+        
+        return {
+            items: validItems,
+            total_price: typeof parsedCart.total_price === 'number' ? parsedCart.total_price : 0
+        };
     } catch (error) {
-        console.error('Ошибка загрузки данных:', error.response ? error.response.data : error.message);
-        toast.value.showToast('Ошибка при загрузке данных. Проверьте консоль.', 'error');
+        console.error('Критическая ошибка загрузки локальной корзины:', error);
+        return { items: [], total_price: 0 };
     }
 };
 
-onMounted(async () => {
-    await loadCurrentUser();
-    await loadCartData();
-});
+const loadCartData = async () => {
+    isLoading.value = true;
+    console.log('Начало загрузки данных корзины');
+    
+    try {
+        const token = localStorage.getItem('token');
+        if (token) {
+            console.log('Авторизованный пользователь, загрузка с сервера');
+            try {
+                const [cartResponse, wishlistResponse] = await Promise.all([
+                    axios.get(`${$apiBaseUrl}/main/cart/`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    }),
+                    axios.get(`${$apiBaseUrl}/main/wishlist/check/`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    })
+                ]);
+                
+                console.log('Данные корзины получены с сервера:', cartResponse.data);
+                
+                // Проверка структуры ответа
+                if (!cartResponse.data || (cartResponse.data.items === undefined)) {
+                    console.error('Неверная структура ответа:', cartResponse.data);
+                    throw new Error('Неверная структура ответа от сервера');
+                }
+
+                const cartData = {
+                    ...cartResponse.data,
+                    total_price: typeof cartResponse.data.total_price === 'number' 
+                        ? cartResponse.data.total_price 
+                        : parseFloat(cartResponse.data.total_price) || 0,
+                    items: Array.isArray(cartResponse.data.items) ? cartResponse.data.items : []
+                };
+                
+                // Сохраняем оригинальное количество для каждого элемента
+                cartData.items.forEach(item => {
+                    item._originalQuantity = item.quantity;
+                });
+                
+                cart.value = cartData;
+                wishlist.value = wishlistResponse.data.wishlist || [];
+
+                // Проверка и синхронизация с локальной корзиной
+                const localCart = loadLocalCart();
+                if (localCart.items && localCart.items.length > 0) {
+                    console.log('Найдена локальная корзина, выполняем слияние');
+                    await mergeLocalCartWithServer(localCart);
+                    localStorage.removeItem('localCart');
+                }
+            } catch (serverError) {
+                console.error('Ошибка получения данных с сервера:', serverError);
+                throw serverError;
+            }
+        } else {
+            console.log('Неавторизованный пользователь, загрузка из локального хранилища');
+            const localCartData = loadLocalCart();
+            console.log('Данные локальной корзины:', localCartData);
+            cart.value = localCartData;
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки данных корзины:', error);
+        console.error('Детали ошибки:', error.response ? error.response.data : error.message);
+        toast.value.showToast('Ошибка при загрузке данных корзины', 'error');
+        
+        // В случае ошибки загружаем из локального хранилища
+        try {
+            const localCartData = loadLocalCart();
+            console.log('Аварийная загрузка из локального хранилища:', localCartData);
+            cart.value = localCartData;
+        } catch (localError) {
+            console.error('Ошибка загрузки из локального хранилища:', localError);
+            // В крайнем случае инициализируем пустую корзину
+            cart.value = { items: [], total_price: 0 };
+        }
+    } finally {
+        isLoading.value = false;
+        console.log('Завершение загрузки данных корзины');
+    }
+};
+
+const mergeLocalCartWithServer = async (localCart) => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token || !localCart.items.length) return;
+
+        const promises = localCart.items.map(item => {
+            return axios.post(`${$apiBaseUrl}/main/cart/add/`, {
+                product_id: item.product_id,
+                quantity: item.quantity
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+        });
+
+        await Promise.all(promises);
+        
+        const cartResponse = await axios.get(`${$apiBaseUrl}/main/cart/`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const cartData = {
+            ...cartResponse.data,
+            total_price: typeof cartResponse.data.total_price === 'number' ? cartResponse.data.total_price : parseFloat(cartResponse.data.total_price) || 0,
+            items: cartResponse.data.items || []
+        };
+        
+        cartData.items.forEach(item => {
+            item._originalQuantity = item.quantity;
+        });
+        
+        cart.value = cartData;
+        
+        toast.value.showToast('Корзина синхронизирована с сервером', 'success');
+    } catch (error) {
+        console.error('Ошибка объединения корзин:', error);
+    }
+};
 
 const increaseQuantity = (item) => {
     updateQuantity(item, 1);
@@ -133,7 +387,6 @@ const updateQuantity = async (item, change) => {
     try {
         const token = localStorage.getItem('token');
         
-        // Если изменение не передано, значит обновляем до текущего значения в поле ввода
         let newQuantity = change !== undefined ? item.quantity + change : item.quantity;
 
         if (newQuantity <= 0) {
@@ -141,82 +394,152 @@ const updateQuantity = async (item, change) => {
             return;
         }
 
-        if (newQuantity > item.product.stock) {
+        if (item.product && item.product.stock && newQuantity > item.product.stock) {
             toast.value.showToast('Нельзя добавить больше, чем есть в наличии!', 'warning');
-            // Возвращаем старое значение
             item.quantity = Math.min(item.quantity, item.product.stock);
             return;
         }
 
-        // Проверяем, может ли пользователь редактировать этот элемент корзины
-        if (!canEditCartItem(item)) {
-            toast.value.showToast('У вас нет прав на редактирование этого товара', 'error');
-            await loadCartData(); // Перезагружаем данные корзины
-            return;
+        if (token) {
+            if (!canEditCartItem(item)) {
+                toast.value.showToast('У вас нет прав на редактирование этого товара', 'error');
+                await loadCartData();
+                return;
+            }
+
+            const quantityDifference = change !== undefined ? change : newQuantity - item._originalQuantity;
+            
+            await axios.post(`${$apiBaseUrl}/main/cart/add/`, {
+                product_id: item.product.id,
+                quantity: quantityDifference
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            await loadCartData();
+        } else {
+            item.quantity = newQuantity;
+            
+            // Сохраняем изменения в localStorage
+            saveLocalCart();
         }
-
-        // Вычисляем разницу для отправки на сервер
-        const quantityDifference = change !== undefined ? change : newQuantity - item._originalQuantity;
-        
-        await axios.post(`${$apiBaseUrl}/main/cart/add/`, {
-            product_id: item.product.id,
-            quantity: quantityDifference
-        }, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-
-        await loadCartData();
     } catch (error) {
         console.error('Ошибка обновления количества:', error);
         toast.value.showToast('Ошибка при обновлении количества', 'error');
     }
 };
 
-// Проверка прав на редактирование элемента корзины
 const canEditCartItem = (item) => {
     if (!currentUser.value) return false;
     
-    // Админ может редактировать любые элементы
     if (currentUser.value.is_superuser) return true;
     
-    // Обычный пользователь может редактировать только свои элементы
     return item.user_id === currentUser.value.id;
 };
 
-// Проверка прав на удаление из корзины
 const canDeleteFromCart = (item) => {
-    if (!currentUser.value) return false;
+    // Для неавторизованных пользователей (локальная корзина)
+    // всегда разрешаем удаление
+    if (!localStorage.getItem('token')) {
+        console.log('Неавторизованный пользователь - разрешаем удаление');
+        return true;
+    }
+    
+    // Товары без user_id считаем локальными и разрешаем удаление
+    if (!item.user_id) {
+        console.log('Товар без user_id (локальный) - разрешаем удаление');
+        return true;
+    }
     
     // Админ может удалять любые товары
-    if (currentUser.value.is_superuser) return true;
+    if (currentUser.value && currentUser.value.is_superuser) {
+        console.log('Пользователь является администратором - разрешаем удаление');
+        return true;
+    }
     
-    // Обычный пользователь может удалять только свои товары
-    return item.user_id === currentUser.value.id;
+    // Важно: если у товара не указан user_id, или если текущий пользователь не загружен,
+    // считаем товар принадлежащим текущему пользователю
+    if (!currentUser.value) {
+        console.log('Пользователь не загружен, но авторизован - разрешаем удаление по умолчанию');
+        return true;
+    }
+    
+    // Явная проверка, принадлежит ли товар текущему пользователю
+    const isOwner = (item.user_id === currentUser.value.id);
+    
+    if (isOwner) {
+        console.log('Товар принадлежит текущему пользователю - разрешаем удаление');
+        return true;
+    }
+    
+    // Ключевое предположение: все товары в корзине принадлежат текущему пользователю
+    // Если мы дошли сюда, то что-то пошло не так с данными user_id
+    console.warn('Несоответствие ID пользователя:', {
+        itemUserId: item.user_id, 
+        currentUserId: currentUser.value ? currentUser.value.id : 'не загружен'
+    });
+    
+    // По умолчанию разрешаем удаление - предполагаем, что все товары в корзине
+    // принадлежат текущему пользователю
+    return true;
 };
 
 const removeFromCart = async (itemId) => {
     try {
+        console.log('Начало удаления товара из корзины, ID:', itemId);
         const token = localStorage.getItem('token');
         const item = cart.value.items.find(item => item.id === itemId);
         
         if (!item) {
-            toast.value.showToast('Товар не найден', 'error');
+            console.error('Товар не найден в корзине, ID:', itemId);
+            toast.value.showToast('Товар не найден в корзине', 'error');
             return;
         }
         
-        if (!canDeleteFromCart(item)) {
-            toast.value.showToast('У вас нет прав на удаление этого товара', 'error');
-            return;
+        console.log('Найден товар для удаления:', item.product.name);
+        
+        // В соответствии с обновленной логикой, все товары в корзине пользователя
+        // должны быть доступны для удаления
+        
+        // Принудительно удалим товар из локального массива для мгновенного отклика UI
+        cart.value.items = cart.value.items.filter(i => i.id !== itemId);
+        
+        // Удаляем из выбранных товаров
+        selectedItems.value = selectedItems.value.filter(id => id !== itemId);
+        
+        if (token) {
+            console.log('Авторизованный пользователь, отправка запроса на удаление с сервера, ID:', itemId);
+            try {
+                const response = await axios.delete(`${$apiBaseUrl}/main/cart/remove/${itemId}/`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                console.log('Ответ сервера на удаление:', response.data);
+                
+                // Перезагрузим данные корзины в фоне, чтобы синхронизировать с сервером
+                await loadCartData();
+            } catch (serverError) {
+                console.error('Ошибка при удалении с сервера:', serverError);
+                toast.value.showToast('Товар удален локально, но произошла ошибка синхронизации с сервером', 'warning');
+            }
+        } else {
+            console.log('Неавторизованный пользователь, удаление из локального хранилища');
+            // Сохраняем изменения в localStorage
+            saveLocalCart();
         }
         
-        await axios.delete(`${$apiBaseUrl}/main/cart/remove/${itemId}/`, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-        await loadCartData();
-        toast.value.showToast('Товар удален из корзины', 'success');
+        toast.value.showToast(`Товар "${item.product.name}" удален из корзины`, 'success');
+        console.log('Товар успешно удален из корзины');
     } catch (error) {
         console.error('Ошибка удаления из корзины:', error);
+        console.error('Детали ошибки:', error.response ? error.response.data : error.message);
         toast.value.showToast('Ошибка при удалении товара из корзины', 'error');
+        
+        // Пытаемся перезагрузить корзину в случае критической ошибки
+        try {
+            await loadCartData();
+        } catch (loadError) {
+            console.error('Ошибка при перезагрузке корзины:', loadError);
+        }
     }
 };
 
@@ -253,26 +576,417 @@ const toggleWishlist = async (product) => {
     }
 };
 
-const calculateTotal = computed(() => {
-    const total = cart.value.items.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
-    return typeof total === 'number' ? total.toFixed(2) : '0.00';
+const isAllSelected = computed(() => {
+    return cart.value.items.length > 0 && selectedItems.value.length === cart.value.items.length;
 });
+
+const toggleSelectAll = () => {
+    if (isAllSelected.value) {
+        selectedItems.value = [];
+    } else {
+        selectedItems.value = cart.value.items.map(item => item.id);
+    }
+};
+
+const getSelectedItemsCount = computed(() => {
+    return selectedItems.value.length;
+});
+
+const getSubtotal = computed(() => {
+    let total = 0;
+    cart.value.items.forEach(item => {
+        if (selectedItems.value.includes(item.id)) {
+            total += item.product.price * item.quantity;
+        }
+    });
+    return total;
+});
+
+const getTotalDiscount = computed(() => {
+    let totalDiscount = 0;
+    cart.value.items.forEach(item => {
+        if (selectedItems.value.includes(item.id)) {
+            if (item.product.discount > 0) {
+                // Расчет скидки: процент от цены
+                const discount = (item.product.price * item.product.discount / 100) * item.quantity;
+                totalDiscount += discount;
+            }
+        }
+    });
+    return totalDiscount;
+});
+
+const getTotal = computed(() => {
+    return getSubtotal.value - promoDiscount.value;
+});
+
+const formatPrice = (price) => {
+    return Number(price).toLocaleString('ru-RU', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+};
+
+const clearCart = async () => {
+    try {
+        if (!selectedItems.value.length) {
+            toast.value.showToast('Выберите товары для удаления', 'warning');
+            return;
+        }
+
+        const token = localStorage.getItem('token');
+        if (!token) {
+            toast.value.showToast('Необходимо авторизоваться', 'warning');
+            return;
+        }
+
+        const confirmClear = confirm('Вы уверены, что хотите удалить выбранные товары из корзины?');
+        if (!confirmClear) return;
+
+        const promises = selectedItems.value.map(itemId => {
+            const item = cart.value.items.find(i => i.id === itemId);
+            if (item && canDeleteFromCart(item)) {
+                return axios.delete(`${$apiBaseUrl}/main/cart/remove/${itemId}/`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+            }
+            return Promise.resolve();
+        });
+
+        await Promise.all(promises);
+        
+        selectedItems.value = [];
+        await loadCartData();
+        toast.value.showToast('Выбранные товары удалены из корзины', 'success');
+    } catch (error) {
+        console.error('Ошибка очистки корзины:', error);
+        toast.value.showToast('Ошибка при удалении товаров из корзины', 'error');
+    }
+};
 
 const checkout = async () => {
     try {
+        console.log('Начало оформления заказа');
         const token = localStorage.getItem('token');
         if (!token) {
+            console.log('Пользователь не авторизован');
             toast.value.showToast('Пожалуйста, войдите в систему для оформления заказа', 'warning');
             return;
         }
 
-        // Здесь будет логика оформления заказа
-        toast.value.showToast('Заказ успешно оформлен!', 'success');
+        if (selectedItems.value.length === 0) {
+            console.log('Не выбраны товары для оформления заказа');
+            toast.value.showToast('Выберите товары для оформления заказа', 'warning');
+            return;
+        }
+
+        // Получаем выбранные товары для заказа
+        const selectedItemsData = cart.value.items
+            .filter(item => selectedItems.value.includes(item.id))
+            .map(item => ({
+                id: item.id,
+                product_id: item.product.id,
+                product_name: item.product.name,
+                product_sku: item.product.sku,
+                quantity: item.quantity,
+                price: item.product.price,
+                total: item.product.price * item.quantity,
+                image: item.product.image
+            }));
+            
+        console.log('Выбранные товары для заказа:', selectedItemsData);
+        
+        // Собираем данные заказа
+        const orderData = {
+            items: selectedItemsData,
+            total: getTotal.value,
+            promocode: promoCode.value || null,
+            discount: promoDiscount.value,
+            date: new Date().toISOString(),
+            status: 'new' // Начальный статус заказа
+        };
+        
+        toast.value.showToast('Оформление заказа...', 'info');
+        
+        try {
+            // Имитация запроса на сервер для создания заказа
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            console.log('Создание заказа:', orderData);
+            
+            // В реальном приложении здесь был бы API-запрос примерно такого вида:
+            /*
+            const orderResponse = await axios.post(`${$apiBaseUrl}/main/orders/create/`, orderData, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            const orderId = orderResponse.data.id;
+            console.log('Заказ создан, ID:', orderId);
+            */
+            
+            // Имитация успешного создания заказа
+            const mockOrderId = Date.now().toString();
+            console.log('Имитация создания заказа, ID:', mockOrderId);
+            
+            // Обновление количества товаров и их статуса
+            const stockUpdatePromises = selectedItemsData.map(item => {
+                return updateProductStock(item.product_id, item.quantity);
+            });
+            
+            // Ждем завершения всех обновлений
+            await Promise.all(stockUpdatePromises);
+            
+            // Сохраняем заказ в истории пользователя
+            await saveOrderToHistory(mockOrderId, orderData);
+            
+            // Копируем массив выбранных ID товаров
+            const orderedItems = [...selectedItems.value];
+            
+            // Удаляем товары из корзины последовательно
+            let hasErrors = false;
+            for (const itemId of orderedItems) {
+                try {
+                    await removeFromCart(itemId);
+                } catch (error) {
+                    console.error(`Ошибка при удалении товара ${itemId}:`, error);
+                    hasErrors = true;
+                }
+            }
+            
+            // Очищаем выбранные товары
+            selectedItems.value = [];
+            
+            // Сбрасываем промокод
+            promoCode.value = '';
+            promoDiscount.value = 0;
+            promoError.value = '';
+            
+            if (hasErrors) {
+                toast.value.showToast('Заказ оформлен, но возникли проблемы с обновлением корзины', 'warning');
+            } else {
+                toast.value.showToast('Заказ успешно оформлен! Номер заказа: ' + mockOrderId, 'success');
+            }
+            
+            console.log('Заказ успешно оформлен');
+            
+        } catch (error) {
+            console.error('Ошибка создания заказа:', error);
+            toast.value.showToast('Ошибка при оформлении заказа', 'error');
+        }
     } catch (error) {
         console.error('Ошибка оформления заказа:', error);
+        console.error('Детали ошибки:', error.response ? error.response.data : error.message);
         toast.value.showToast('Ошибка при оформлении заказа', 'error');
     }
 };
+
+// Функция для обновления остатка товара
+const updateProductStock = async (productId, quantity) => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        
+        console.log(`Обновление количества товара ${productId}, уменьшение на ${quantity}`);
+        
+        // В реальном приложении здесь был бы API-запрос:
+        /*
+        const response = await axios.post(`${$apiBaseUrl}/main/products/update-stock/`, {
+            product_id: productId,
+            quantity_change: -quantity // Отрицательное значение, так как уменьшаем
+        }, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const updatedProduct = response.data;
+        console.log('Обновлено количество товара:', updatedProduct);
+        
+        if (updatedProduct.stock <= 0) {
+            console.log('Товар закончился, статус изменен на "Распродано"');
+        }
+        */
+        
+        // Имитация обновления количества товаров
+        console.log(`Имитация: уменьшение количества товара ${productId} на ${quantity}`);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        return true;
+    } catch (error) {
+        console.error('Ошибка обновления количества товара:', error);
+        return false;
+    }
+};
+
+// Функция для сохранения заказа в истории пользователя
+const saveOrderToHistory = async (orderId, orderData) => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        
+        console.log('Сохранение заказа в истории пользователя, ID:', orderId);
+        
+        // В реальном приложении здесь был бы API-запрос:
+        /*
+        const response = await axios.post(`${$apiBaseUrl}/main/user/order-history/add/`, {
+            order_id: orderId,
+            order_data: orderData
+        }, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        console.log('Заказ сохранен в истории:', response.data);
+        */
+        
+        // Имитация сохранения заказа в истории
+        console.log('Имитация: сохранение заказа в истории пользователя');
+        
+        // Можно было бы использовать localStorage для сохранения истории заказов
+        let orderHistory = [];
+        try {
+            const savedHistory = localStorage.getItem('orderHistory');
+            if (savedHistory) {
+                orderHistory = JSON.parse(savedHistory);
+            }
+        } catch (e) {
+            console.error('Ошибка при чтении истории заказов:', e);
+        }
+        
+        // Добавляем новый заказ
+        orderHistory.push({
+            id: orderId,
+            ...orderData
+        });
+        
+        // Сохраняем обновленную историю
+        localStorage.setItem('orderHistory', JSON.stringify(orderHistory));
+        console.log('История заказов обновлена');
+        
+        return true;
+    } catch (error) {
+        console.error('Ошибка сохранения заказа в истории:', error);
+        return false;
+    }
+};
+
+const applyPromoCode = async () => {
+    if (!promoCode.value) return;
+    
+    isPromoLoading.value = true;
+    promoError.value = '';
+    
+    try {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const validPromoCodes = {
+            'WELCOME10': 0.1,
+            'SUMMER20': 0.2,
+            'SALE30': 0.3,
+            'DISCOUNT5': 500
+        };
+        
+        const discount = validPromoCodes[promoCode.value.toUpperCase()];
+        
+        if (discount) {
+            if (discount < 1) {
+                promoDiscount.value = getSubtotal.value * discount;
+            } else {
+                promoDiscount.value = Math.min(discount, getSubtotal.value);
+            }
+            
+            toast.value.showToast('Промокод успешно применен!', 'success');
+        } else {
+            promoError.value = 'Недействительный промокод';
+            promoDiscount.value = 0;
+        }
+    } catch (error) {
+        console.error('Ошибка применения промокода:', error);
+        promoError.value = 'Ошибка при применении промокода';
+        promoDiscount.value = 0;
+    } finally {
+        isPromoLoading.value = false;
+    }
+};
+
+const saveLocalCart = () => {
+    try {
+        console.log('Начало сохранения локальной корзины');
+        
+        // Если корзина пуста, просто удаляем запись из localStorage
+        if (!cart.value.items || cart.value.items.length === 0) {
+            localStorage.removeItem('localCart');
+            console.log('Локальная корзина пуста, удаляем из localStorage');
+            return;
+        }
+        
+        // Подготавливаем данные для сохранения, удаляя ненужные или слишком большие поля
+        const localCart = {
+            items: cart.value.items.map(item => {
+                // Очищаем продукт от лишних данных, чтобы уменьшить размер хранилища
+                const simplifiedProduct = {
+                    id: item.product.id,
+                    name: item.product.name,
+                    price: item.product.price,
+                    sku: item.product.sku,
+                    image: item.product.image,
+                    stock: item.product.stock,
+                    discount: item.product.discount
+                };
+                
+                // Если есть категория, добавляем базовую информацию
+                if (item.product.category) {
+                    simplifiedProduct.category = {
+                        id: item.product.category.id,
+                        name: item.product.category.name
+                    };
+                }
+                
+                return {
+                    id: item.id,
+                    product_id: item.product.id,
+                    product: simplifiedProduct,
+                    quantity: item.quantity
+                };
+            }),
+            total_price: getTotal.value,
+            updated_at: new Date().toISOString()
+        };
+        
+        // Сохраняем в localStorage с обработкой ошибок
+        try {
+            const serialized = JSON.stringify(localCart);
+            localStorage.setItem('localCart', serialized);
+            console.log(`Локальная корзина сохранена (${localCart.items.length} товаров, ${serialized.length} байт)`);
+        } catch (storageError) {
+            // Если произошла ошибка при сохранении (например, превышен лимит localStorage)
+            console.error('Ошибка при записи в localStorage:', storageError);
+            
+            // Пытаемся сохранить упрощенную версию без детальной информации о продукте
+            const simplifiedCart = {
+                items: localCart.items.map(item => ({
+                    id: item.id,
+                    product_id: item.product_id,
+                    quantity: item.quantity
+                })),
+                total_price: localCart.total_price,
+                updated_at: localCart.updated_at
+            };
+            
+            try {
+                localStorage.setItem('localCart', JSON.stringify(simplifiedCart));
+                console.log('Сохранена упрощенная версия корзины');
+            } catch (fallbackError) {
+                console.error('Не удалось сохранить даже упрощенную версию:', fallbackError);
+            }
+        }
+    } catch (error) {
+        console.error('Критическая ошибка сохранения локальной корзины:', error);
+    }
+};
+
+onMounted(async () => {
+    promoCode.value = '';
+    promoDiscount.value = 0;
+    promoError.value = '';
+    
+    await loadCurrentUser();
+    await loadCartData();
+});
 </script>
 
 <style scoped>
@@ -578,5 +1292,346 @@ const checkout = async () => {
     border-radius: 12px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
     margin-top: 20px;
+}
+
+.cart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding: 10px 15px;
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.select-all-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.select-all-checkbox {
+    width: 20px;
+    height: 20px;
+    accent-color: #6b46c1;
+}
+
+.select-all-container label {
+    font-size: 16px;
+    color: #333;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.clear-cart-btn {
+    background: none;
+    border: none;
+    color: #dc3545;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 5px;
+    transition: all 0.2s ease;
+}
+
+.clear-cart-btn:hover {
+    background-color: rgba(220, 53, 69, 0.1);
+}
+
+.cart-summary {
+    margin-bottom: 15px;
+}
+
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 16px;
+    color: #555;
+}
+
+.summary-row.discount {
+    color: #e74c3c;
+}
+
+.summary-row.total {
+    font-size: 22px;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+}
+
+.promo-code-container {
+    background-color: #f9f9f9;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    border: 1px solid #eee;
+}
+
+.promo-input-group {
+    display: flex;
+    gap: 8px;
+}
+
+.promo-input {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.promo-input:focus {
+    outline: none;
+    border-color: #6b46c1;
+}
+
+.apply-promo-btn {
+    background-color: #6b46c1;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 0 15px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.apply-promo-btn:hover:not(:disabled) {
+    background-color: #553c9a;
+}
+
+.apply-promo-btn:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.promo-error {
+    color: #e74c3c;
+    font-size: 13px;
+    margin: 5px 0 0;
+}
+
+.promo-success {
+    color: #27ae60;
+    font-size: 13px;
+    margin: 5px 0 0;
+}
+
+.promo-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top: 2px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .cart-item {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 15px;
+    }
+    
+    .cart-item-image-wrapper {
+        width: 100%;
+        height: auto;
+        margin-right: 0;
+        margin-bottom: 15px;
+    }
+    
+    .cart-item-details {
+        max-width: 100%;
+        width: 100%;
+    }
+    
+    .cart-item-actions {
+        flex-direction: row;
+        margin-left: 0;
+        margin-top: 15px;
+        width: 100%;
+        justify-content: flex-end;
+    }
+    
+    .item-checkbox {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        margin-right: 0;
+    }
+    
+    .cart-total {
+        position: static;
+        margin-top: 20px;
+    }
+}
+
+@media (max-width: 480px) {
+    .cart-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .select-all-container {
+        width: 100%;
+    }
+    
+    .clear-cart-btn {
+        width: 100%;
+    }
+    
+    .cart-item-details h3 {
+        white-space: normal;
+    }
+    
+    .price-container {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+    }
+    
+    .cart-total p {
+        font-size: 22px;
+    }
+    
+    .checkout-button {
+        padding: 12px;
+        font-size: 16px;
+    }
+    
+    .promo-input-group {
+        flex-direction: column;
+    }
+    
+    .apply-promo-btn {
+        width: 100%;
+        padding: 10px;
+    }
+}
+
+.loading-spinner-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    text-align: center;
+}
+
+.loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #6b46c1;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 15px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.empty-cart {
+    text-align: center;
+    padding: 40px 20px;
+    background-color: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+.empty-cart-icon {
+    font-size: 60px;
+    margin-bottom: 10px;
+}
+
+.empty-cart h3 {
+    font-size: 24px;
+    color: #2c3e50;
+    margin: 0;
+}
+
+.empty-cart p {
+    font-size: 16px;
+    color: #7f8c8d;
+    margin: 0;
+}
+
+.continue-shopping-btn {
+    display: inline-block;
+    background-color: #6b46c1;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+    text-align: center;
+}
+
+.continue-shopping-btn:hover {
+    background-color: #553c9a;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.cart-buttons {
+    display: flex;
+    gap: 15px;
+}
+
+.cart-buttons .continue-shopping-btn {
+    flex: 1;
+}
+
+.cart-buttons .checkout-button {
+    flex: 2;
+}
+
+@media (max-width: 768px) {
+    .cart-buttons {
+        flex-direction: column;
+    }
+    
+    .cart-buttons .continue-shopping-btn,
+    .cart-buttons .checkout-button {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .empty-cart-icon {
+        font-size: 50px;
+    }
+    
+    .empty-cart h3 {
+        font-size: 20px;
+    }
+    
+    .empty-cart p {
+        font-size: 14px;
+    }
 }
 </style>

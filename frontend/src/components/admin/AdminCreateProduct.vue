@@ -56,6 +56,17 @@
                     />
                 </div>
                 <div class="form-group">
+                    <label>Скидка (%):</label>
+                    <input 
+                        v-model.number="newProduct.discount" 
+                        type="number" 
+                        min="0"
+                        max="100"
+                        class="form-input"
+                        placeholder="0"
+                    />
+                </div>
+                <div class="form-group">
                     <label>Количество на складе:</label>
                     <input 
                         v-model.number="newProduct.stock" 
@@ -137,6 +148,7 @@ const newProduct = ref({
     sku: '',
     description: '',
     price: 0,
+    discount: 0,
     stock: 0,
     category: '',
     image: null,
@@ -186,6 +198,7 @@ const submitNewProduct = async () => {
         formData.append('sku', newProduct.value.sku);
         formData.append('description', newProduct.value.description);
         formData.append('price', newProduct.value.price);
+        formData.append('discount', newProduct.value.discount || 0);
         formData.append('stock', newProduct.value.stock);
         formData.append('is_available', newProduct.value.is_available);
 

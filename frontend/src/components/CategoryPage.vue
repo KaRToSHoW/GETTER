@@ -158,14 +158,20 @@
                     <router-link :to="`/product/${product.id}`" class="product-link">
                         <div class="image-wrapper">
                             <img :src="product.image || defaultImage" class="product-image" />
-                            <div class="discount-tag">-4%</div>
+                            <div v-if="product.discount > 0" class="discount-tag">-{{ product.discount }}%</div>
                         </div>
                     </router-link>
                     <div class="product-content">
                         <h3>{{ product.name }}</h3>
+                        <div class="rating" v-if="product.average_rating">
+                            <span class="stars">
+                                <span v-for="i in 5" :key="i" :class="['star', i <= Math.round(product.average_rating) ? 'filled' : '']">★</span>
+                            </span>
+                            <span class="rating-value">{{ product.average_rating ? product.average_rating.toFixed(1) : '0.0' }}</span>
+                        </div>
                         <div class="price-container">
-                            <p class="old-price"><s>{{ (product.price / 0.96).toFixed(2) }} ₽</s></p>
-                            <p class="price">{{ product.price }} ₽</p>
+                            <p v-if="product.discount > 0" class="old-price"><s>{{ product.price }} ₽</s></p>
+                            <p class="price">{{ product.discounted_price }} ₽</p>
                         </div>
                         <div class="availability" :class="{ 'out-of-stock': !product.is_available }">
                             <span>{{ product.is_available ? 'В наличии' : 'Нет в наличии' }}</span>
@@ -338,10 +344,7 @@ const applyFilters = () => {
 
     // Фильтр по скидке
     if (filters.value.hasDiscount) {
-        filtered = filtered.filter(product => {
-            const originalPrice = product.price / 0.96;
-            return originalPrice > product.price;
-        });
+        filtered = filtered.filter(product => product.discount > 0);
     }
 
     // Фильтр по характеристикам
@@ -370,9 +373,7 @@ const applyFilters = () => {
             break;
         case 'discount':
             filtered.sort((a, b) => {
-                const discountA = a.price / 0.96 - a.price;
-                const discountB = b.price / 0.96 - b.price;
-                return discountB - discountA;
+                return (b.discount || 0) - (a.discount || 0);
             });
             break;
         case 'name-asc':
@@ -516,7 +517,7 @@ const getFilterValueCount = (filterKey, filterValue) => {
             return product.is_available && product.stock > 0;
         }
         if (filterKey === 'hasDiscount') {
-            return product.price < product.price / 0.96;
+            return product.discount > 0;
         }
         if (product.specifications && product.specifications[filterKey]) {
             return product.specifications[filterKey] === filterValue;
@@ -1502,5 +1503,32 @@ const cancelAddingProducts = () => {
 
 .form-group select[multiple] option:hover {
     background-color: #edf2f7;
+}
+
+.rating {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 5px;
+}
+
+.stars {
+    display: inline-flex;
+    margin-right: 5px;
+}
+
+.star {
+    color: #ccc;
+    font-size: 18px;
+}
+
+.star.filled {
+    color: #ffc107;
+}
+
+.rating-value {
+    font-size: 14px;
+    color: #666;
+    font-weight: 500;
 }
 </style>

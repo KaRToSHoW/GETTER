@@ -22,9 +22,12 @@ class Product(models.Model):
     name = models.CharField(max_length=255, verbose_name="Название")
     description = models.TextField(blank=True, null=True, verbose_name="Описание")
     price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Цена")
+    discount = models.PositiveSmallIntegerField(default=0, verbose_name="Скидка в %")
     stock = models.PositiveIntegerField(verbose_name="Количество")
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="products", verbose_name="Категория")
     image = models.ImageField(upload_to='product_images/', blank=True, null=True, verbose_name="Картинка товара")
+    manufacturer_url = models.URLField(verbose_name="Сайт производителя", blank=True, null=True)
+    documentation = models.FileField(upload_to='product_docs/', blank=True, null=True, verbose_name="Документация")
     is_available = models.BooleanField(default=True, verbose_name="В наличии")
     specifications = models.JSONField(blank=True, null=True, verbose_name="Характеристики")
     creation_date = models.DateTimeField(default=timezone.now, verbose_name="Дата поступления")
@@ -38,22 +41,13 @@ class Product(models.Model):
 
     def get_absolute_url(self):
         return reverse('product-detail', kwargs={'pk': self.pk})
-    
-    def get_discount(self):
-        """Расчет скидки в зависимости от срока хранения товара"""
-        days_in_stock = (timezone.now() - self.creation_date).days
-        
-        if days_in_stock > 180:  # Более 6 месяцев
-            return 0.25  # 25% скидка
-        elif days_in_stock > 90:  # Более 3 месяцев
-            return 0.15  # 15% скидка
-        elif days_in_stock > 30:  # Более месяца
-            return 0.05  # 5% скидка
-        return 0  # Без скидки для новых товаров
         
     def get_discounted_price(self):
-        discount = self.get_discount()
-        return self.price * (1 - discount)
+        """Возвращает цену товара с учетом скидки"""
+        if self.discount == 0:
+            return self.price
+        discount_amount = (self.price * self.discount) / 100
+        return round(self.price - discount_amount, 2)
 
 class OrderManager(models.Manager):
     def pending(self):
