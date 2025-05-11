@@ -495,20 +495,24 @@ export default {
 <style scoped>
 /* Стили для хедера */
 header {
-    background-color: #f0f0f0;
+    background-color: #ffffff;
     color: #333;
-    padding: 10px 0;
-    border-bottom: 1px solid #ddd;
+    padding: 15px 0;
+    border-bottom: none;
     position: sticky;
     top: 0;
     z-index: 1000;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    background: rgba(255, 255, 255, 0.92);
 }
 
 .header-content {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 20px;
+    padding: 0 25px;
     max-width: 1200px;
     margin: 0 auto;
     position: relative;
@@ -516,18 +520,69 @@ header {
 
 .logo-container {
     text-decoration: none;
+    position: relative;
+    overflow: hidden;
+    padding: 2px 8px;
+    border-radius: 8px;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.logo-container:hover {
+    transform: translateY(-2px) scale(1.03);
+}
+
+.logo-container:before {
+    content: '';
+    position: absolute;
+    left: -10px;
+    top: 0;
+    width: 10px;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+    animation: shimmer 3s infinite;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.logo-container:hover:before {
+    opacity: 1;
+}
+
+@keyframes shimmer {
+    0% { left: -10px; }
+    100% { left: 100%; }
 }
 
 .logo {
-    font-size: 24px;
+    font-size: 26px;
     margin: 0;
-    color: #6b46c1;
-    font-weight: bold;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #6b46c1 0%, #9f7aea 50%, #805ad5 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 2px 4px rgba(107, 70, 193, 0.3));
+    position: relative;
+    display: inline-block;
+    padding-right: 8px;
+}
+
+.logo:after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 25%;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #f687b3 0%, #fc8181 100%);
+    box-shadow: 0 0 8px rgba(246, 135, 179, 0.6);
 }
 
 .search-bar {
     flex-grow: 1;
-    margin: 0 20px;
+    margin: 0 30px;
     position: relative;
     display: flex;
     align-items: center;
@@ -536,71 +591,109 @@ header {
 .search-container {
     position: relative;
     flex-grow: 1;
+    max-width: 500px;
+    margin: 0 auto;
 }
 
 .search-bar input {
     width: 100%;
-    padding: 8px 40px 8px 12px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
+    padding: 12px 45px 12px 18px;
+    border: 1px solid #e4e4e7;
+    border-radius: 16px;
     font-size: 14px;
     box-sizing: border-box;
+    background-color: #f9f9fb;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.search-bar input:focus {
+    border-color: #8b5cf6;
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.15);
+    background-color: #fff;
+    transform: translateY(-1px);
 }
 
 .search-button {
     background: none;
     border: none;
     position: absolute;
-    right: 8px;
+    right: 12px;
     top: 50%;
     transform: translateY(-50%);
     cursor: pointer;
-    padding: 4px;
-    font-size: 16px;
+    padding: 8px;
+    font-size: 18px;
+    color: #8b5cf6;
+    transition: all 0.2s ease;
 }
 
 .search-button:hover {
-    opacity: 0.7;
+    transform: translateY(-50%) scale(1.1) rotate(5deg);
+    color: #6b46c1;
 }
 
 .search-dropdown {
     position: absolute;
-    top: 100%;
+    top: 110%;
     left: 0;
     right: 0;
     background: white;
-    border: 1px solid #eaeaea;
-    border-radius: 8px;
-    margin-top: 4px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border: none;
+    border-radius: 16px;
+    margin-top: 8px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
     z-index: 1000;
     max-height: 400px;
     overflow-y: auto;
-    padding: 8px 0;
+    padding: 10px 0;
+    animation: fadeInDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .search-item {
     display: flex;
-    padding: 12px 16px;
+    padding: 14px 16px;
     cursor: pointer;
-    transition: all 0.2s ease;
-    border-radius: 4px;
-    margin: 0 8px;
+    transition: all 0.25s ease;
+    border-radius: 12px;
+    margin: 0 8px 4px;
+    border: 1px solid transparent;
 }
 
 .search-item:hover {
-    background-color: #f5f5f7;
-    transform: translateX(4px);
+    background-color: #f5f3ff;
+    transform: translateX(4px) scale(1.01);
+    border-color: #e9d8fd;
 }
 
 .search-item-image {
-    width: 48px;
-    height: 48px;
+    width: 50px;
+    height: 50px;
     margin-right: 16px;
     flex-shrink: 0;
-    border-radius: 8px;
+    border-radius: 12px;
     overflow: hidden;
     background-color: #f5f5f7;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.04);
+    transform: rotate(-2deg);
+    transition: transform 0.3s ease;
+}
+
+.search-item:hover .search-item-image {
+    transform: rotate(0deg) scale(1.05);
 }
 
 .search-item-image img {
@@ -617,22 +710,22 @@ header {
 }
 
 .search-item-name {
-    font-weight: 500;
+    font-weight: 600;
     color: #1d1d1f;
     margin-bottom: 4px;
     font-size: var(--font-size);
 }
 
 .search-item-price {
-    color: #6b46c1;
-    font-weight: 600;
+    color: #8b5cf6;
+    font-weight: 700;
     font-size: var(--font-size);
 }
 
 .search-item-category {
     color: #86868b;
     font-size: calc(var(--font-size) - 2px);
-    margin-top: 2px;
+    margin-top: 4px;
 }
 
 /* Десктопная навигация */
@@ -659,13 +752,37 @@ header {
     color: #333;
     text-decoration: none;
     font-size: var(--font-size);
-    padding: 8px 12px;
+    padding: 8px 14px;
     display: block;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    font-weight: 500;
+    position: relative;
+    overflow: hidden;
+    z-index: 1;
+}
+
+.desktop-nav ul li a:before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 0;
+    height: 2px;
+    background: linear-gradient(90deg, #8b5cf6, #d8b4fe);
+    transition: all 0.3s ease;
+    transform: translateX(-50%);
+    z-index: -1;
+}
+
+.desktop-nav ul li a:hover:before {
+    width: 100%;
 }
 
 .desktop-nav ul li a:hover {
-    text-decoration: underline;
     color: #6b46c1;
+    background-color: rgba(107, 70, 193, 0.05);
+    transform: translateY(-2px);
 }
 
 /* Стили для выпадающего меню с плавностью при наведении */
@@ -675,25 +792,27 @@ header {
 
 .desktop-nav .profile-dropdown .dropdown-menu {
     position: absolute;
-    top: 100%;
+    top: 120%;
     right: 0;
     background-color: #fff;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    min-width: 150px;
+    border: none;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+    min-width: 200px;
     z-index: 1000;
     opacity: 0;
     visibility: hidden;
-    transform: translateY(-10px);
-    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s linear 0.2s;
+    transform: translateY(-10px) scale(0.95);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    transform-origin: top right;
+    overflow: hidden;
 }
 
 .desktop-nav .profile-dropdown .dropdown-menu ul {
     display: flex;
     flex-direction: column;
     list-style: none;
-    padding: 5px 0;
+    padding: 10px 0;
     margin: 0;
 }
 
@@ -702,22 +821,29 @@ header {
 }
 
 .desktop-nav .profile-dropdown .dropdown-menu ul li a {
-    padding: 8px 16px;
+    padding: 12px 20px;
     color: #333;
     display: block;
+    font-weight: 400;
+    border-radius: 0;
+    transition: all 0.2s ease;
 }
 
 .desktop-nav .profile-dropdown .dropdown-menu ul li a:hover {
-    background-color: #f0f0f0;
-    text-decoration: none;
+    background-color: #f5f3ff;
+    color: #6b46c1;
+    padding-left: 24px;
+}
+
+.desktop-nav .profile-dropdown .dropdown-menu ul li a:before {
+    display: none;
 }
 
 /* Показываем меню при наведении */
 .desktop-nav .profile-dropdown:hover .dropdown-menu {
     opacity: 1;
     visibility: visible;
-    transform: translateY(0);
-    transition: opacity 0.2s ease, transform 0.2s ease;
+    transform: translateY(0) scale(1);
 }
 
 /* Стили для компонента доступности */
@@ -728,24 +854,23 @@ header {
 }
 
 .accessibility-button {
-    background: #f2f2f2;
-    color: #555;
+    background: linear-gradient(135deg, #f5f3ff 0%, #e9d8fd 100%);
+    color: #6b46c1;
     border: none;
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
     border-radius: 50%;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(107, 70, 193, 0.2);
 }
 
 .accessibility-button:hover {
-    background: #e0e0e0;
-    transform: scale(1.05);
-    box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+    transform: scale(1.1) rotate(5deg);
+    box-shadow: 0 4px 12px rgba(107, 70, 193, 0.3);
 }
 
 .accessibility-icon {
@@ -756,82 +881,129 @@ header {
 }
 
 .accessibility-menu {
-    width: 280px;
+    width: 320px;
     position: absolute;
-    top: 100%;
+    top: 120%;
     right: -70px;
     background: white;
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    padding: 16px;
-    margin-top: 8px;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+    padding: 25px;
+    margin-top: 12px;
     z-index: 1000;
+    animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    transform-origin: top right;
+    border: 1px solid rgba(107, 70, 193, 0.1);
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 .accessibility-menu h3 {
     margin-top: 0;
-    margin-bottom: 16px;
+    margin-bottom: 20px;
     color: #333;
-    font-size: 18px;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 8px;
+    font-size: 20px;
+    border-bottom: 1px solid #f0f0f0;
+    padding-bottom: 15px;
+    text-align: center;
+    font-weight: 600;
+    background: linear-gradient(135deg, #6b46c1 0%, #9f7aea 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .accessibility-section {
-    margin-bottom: 16px;
+    margin-bottom: 22px;
 }
 
 .accessibility-section label {
     display: block;
-    margin-bottom: 6px;
+    margin-bottom: 10px;
     font-weight: 500;
     color: #444;
+    font-size: 15px;
 }
 
 .accessibility-section select {
     width: 100%;
-    padding: 8px;
-    border-radius: 4px;
-    border: 1px solid #ddd;
-    background-color: #f9f9f9;
+    padding: 12px 15px;
+    border-radius: 12px;
+    border: 1px solid #e9d8fd;
+    background-color: #f9f9fb;
+    font-size: 14px;
+    color: #333;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b46c1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 15px center;
+}
+
+.accessibility-section select:focus {
+    border-color: #8b5cf6;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
 }
 
 .select-group {
-    margin-bottom: 8px;
+    margin-bottom: 10px;
+    position: relative;
 }
 
 .accessibility-buttons {
     display: flex;
-    justify-content: flex-end;
-    margin-top: 16px;
+    justify-content: center;
+    margin-top: 25px;
 }
 
 .reset-btn {
-    background-color: #f44336;
+    background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
     color: white;
     border: none;
-    padding: 8px 16px;
-    border-radius: 4px;
+    padding: 12px 24px;
+    border-radius: 12px;
     cursor: pointer;
-    font-weight: 500;
-    transition: all 0.2s ease;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(244, 63, 94, 0.2);
 }
 
 .reset-btn:hover {
-    background-color: #d32f2f;
+    background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
+    transform: translateY(-3px);
+    box-shadow: 0 6px 15px rgba(244, 63, 94, 0.3);
 }
 
 /* Мобильная кнопка меню */
 .mobile-menu-toggle {
     display: none;
-    background: transparent;
+    background: linear-gradient(135deg, #f5f3ff 0%, #e9d8fd 100%);
     border: none;
-    width: 40px;
-    height: 40px;
+    width: 42px;
+    height: 42px;
     padding: 5px;
     cursor: pointer;
     position: relative;
     z-index: 1002;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(107, 70, 193, 0.2);
+    transition: all 0.3s ease;
+}
+
+.mobile-menu-toggle:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(107, 70, 193, 0.3);
 }
 
 .menu-icon-wrapper {
@@ -846,7 +1018,7 @@ header {
     display: block;
     width: 24px;
     height: 2px;
-    background-color: #333;
+    background-color: #6b46c1;
     position: relative;
     transition: background-color 0.3s, transform 0.3s;
 }
@@ -857,7 +1029,7 @@ header {
     position: absolute;
     width: 24px;
     height: 2px;
-    background-color: #333;
+    background-color: #6b46c1;
     transition: transform 0.3s;
     left: 0;
 }
@@ -886,21 +1058,21 @@ header {
 /* Кнопка поиска для мобильных */
 .mobile-search-toggle {
     display: none;
-    background: #f2f2f2;
-    color: #555;
+    background: linear-gradient(135deg, #f5f3ff 0%, #e9d8fd 100%);
+    color: #6b46c1;
     border: none;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
     cursor: pointer;
     font-size: 18px;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(107, 70, 193, 0.2);
 }
 
 .mobile-search-toggle:hover {
-    background: #e0e0e0;
     transform: scale(1.05);
-    box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 12px rgba(107, 70, 193, 0.3);
 }
 
 .search-icon {
@@ -918,12 +1090,12 @@ header {
 /* Мобильная навигация */
 .mobile-nav-header {
     display: flex;
-    background-color: #f5f5f7;
-    padding: 15px 20px;
-    border-bottom: 1px solid #eee;
+    background: linear-gradient(135deg, #f5f3ff 0%, #e9d8fd 100%);
+    padding: 20px;
+    border-bottom: 1px solid #e9d8fd;
     justify-content: flex-end;
     align-items: center;
-    border-radius: 12px 0 0 0;
+    border-radius: 20px 0 0 0;
 }
 
 .mobile-close {
@@ -931,25 +1103,26 @@ header {
     border: none;
     font-size: 28px;
     cursor: pointer;
-    color: #333;
+    color: #6b46c1;
     width: 40px;
     height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    transition: background-color 0.3s;
+    transition: all 0.3s ease;
 }
 
 .mobile-close:hover {
-    background-color: rgba(0,0,0,0.05);
+    background-color: rgba(107, 70, 193, 0.1);
+    transform: rotate(90deg);
 }
 
 /* Стили для мобильных устройств */
 @media (max-width: 768px) {
     .header-content {
         padding: 0 15px;
-        height: 60px;
+        height: 70px;
     }
     
     .desktop-nav {
@@ -962,18 +1135,6 @@ header {
         justify-content: center;
         order: 3;
         margin-left: 15px;
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        background: #f2f2f2;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        transition: all 0.2s ease;
-    }
-
-    .mobile-menu-toggle:hover {
-        background: #e0e0e0;
-        transform: scale(1.05);
-        box-shadow: 0 3px 8px rgba(0,0,0,0.15);
     }
     
     .menu-icon-wrapper {
@@ -998,7 +1159,6 @@ header {
         justify-content: center;
         order: 2;
         margin-left: 15px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
     
     .logo-container {
@@ -1013,100 +1173,102 @@ header {
         top: 100%;
         left: 0;
         right: 0;
-        background: #f5f5f7;
-        padding: 15px;
+        background: rgba(255, 255, 255, 0.98);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        padding: 18px;
         margin: 0;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.12);
         display: none;
         z-index: 10;
-        border-radius: 0 0 12px 12px;
+        border-radius: 0 0 20px 20px;
     }
     
     .search-bar.mobile-visible {
         display: block;
-        animation: slideDown 0.3s ease-out;
+        animation: slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
     
     .mobile-nav {
         display: block;
         position: fixed;
         top: 0;
-        right: -300px;
-        width: 300px;
+        right: -100%;
+        width: 85%;
+        max-width: 360px;
         height: 100vh;
         background: white;
         z-index: 1001;
-        transition: transform 0.3s ease;
-        box-shadow: -2px 0 15px rgba(0,0,0,0.15);
+        transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: -5px 0 30px rgba(0,0,0,0.15);
         overflow-y: auto;
-        border-radius: 12px 0 0 12px;
+        border-radius: 20px 0 0 20px;
     }
     
     .mobile-nav.mobile-open {
-        transform: translateX(-300px);
-        animation: slideSidebarIn 0.3s ease-out;
+        transform: translateX(-100%);
     }
     
     .mobile-nav ul {
         flex-direction: column;
-        padding: 0;
+        padding: 10px 0;
         margin: 0;
     }
     
     .mobile-nav ul li {
-        margin: 0;
-        border-bottom: 1px solid #eee;
+        margin: 5px 15px;
+        border-radius: 15px;
+        overflow: hidden;
+        border: 1px solid transparent;
+        transition: all 0.3s ease;
+    }
+    
+    .mobile-nav ul li:hover {
+        border-color: #e9d8fd;
+        background-color: #f5f3ff;
     }
     
     .mobile-nav ul li a {
-        padding: 15px 20px;
+        padding: 16px 20px;
         font-size: 16px;
         display: block;
         color: #333;
-        transition: background-color 0.3s;
+        transition: all 0.3s ease;
+        font-weight: 500;
     }
     
     .mobile-nav ul li a:hover {
-        background-color: #f5f5f7;
-        text-decoration: none;
+        color: #6b46c1;
+        transform: translateX(5px);
     }
     
     /* Обновленное меню доступности для мобильных */
     .accessibility-menu {
-        width: 280px;
-        left: -10px;
-        right: auto;
-        top: 50px;
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        width: calc(100vw - 60px);
+        max-width: 320px;
+        left: 15px;
+        right: 15px;
+        top: 70px;
+        border-radius: 20px;
+        box-shadow: 0 15px 40px rgba(0,0,0,0.2);
     }
     
     /* Для очень маленьких экранов */
     @media (max-width: 480px) {
         .accessibility-menu {
-            width: 260px;
-            left: -10px;
-            right: auto;
+            width: calc(100vw - 40px);
+            padding: 20px;
         }
     }
     
     @keyframes slideDown {
         from { 
             opacity: 0;
-            transform: translateY(-10px);
+            transform: translateY(-20px);
         }
         to { 
             opacity: 1;
             transform: translateY(0);
-        }
-    }
-    
-    @keyframes slideSidebarIn {
-        from { 
-            transform: translateX(0);
-        }
-        to { 
-            transform: translateX(-300px);
         }
     }
     
@@ -1135,14 +1297,22 @@ header {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
     z-index: 999;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 /* Для очень маленьких экранов */
 @media (max-width: 480px) {
     .logo {
-        font-size: 20px;
+        font-size: 24px;
     }
     
     .header-content {
@@ -1167,5 +1337,25 @@ header {
 
 .desktop-nav .accessibility-item .accessibility-button {
     margin: 0 0 0 10px;
+}
+
+/* Добавление красивых эффектов для активных элементов навигации */
+.desktop-nav ul li a.router-link-active {
+    color: #6b46c1;
+    background-color: rgba(107, 70, 193, 0.08);
+    font-weight: 600;
+}
+
+.desktop-nav ul li a.router-link-active:before {
+    width: 70%;
+    height: 3px;
+}
+
+/* Улучшенные эффекты при наведении для элементов хедера */
+.profile-dropdown > a:hover + .dropdown-menu,
+.dropdown-menu:hover {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0) scale(1);
 }
 </style>
