@@ -5,15 +5,17 @@
             <router-link to="/home" class="logo-container"><h1 class="logo">GETTER</h1></router-link>
             
             <!-- Мобильная кнопка меню -->
-            <button class="mobile-menu-toggle" @click="toggleMobileMenu" aria-label="Открыть меню">
+            <button class="mobile-menu-toggle" @click="toggleMobileMenu">
                 <div class="menu-icon-wrapper">
                     <span class="mobile-menu-icon" :class="{ 'open': mobileMenuOpen }"></span>
                 </div>
+                <span class="sr-only">Открыть меню</span>
             </button>
             
             <!-- Кнопка поиска для мобильных -->
-            <button class="mobile-search-toggle" @click="toggleSearchBar" aria-label="Поиск">
+            <button class="mobile-search-toggle" @click="toggleSearchBar">
                 <i class="search-icon">🔍</i>
+                <span class="sr-only">Поиск</span>
             </button>
             
             <div class="search-bar" :class="{ 'mobile-visible': searchBarVisible }">
@@ -25,9 +27,11 @@
                         @keyup.enter="handleSearch"
                         @focus="showDropdown = true"
                         placeholder="Поиск" 
+                        aria-label="Поиск товаров"
                     />
                     <button @click="handleSearch" class="search-button">
                         🔍
+                        <span class="sr-only">Искать</span>
                     </button>
                     
                     <!-- Выпадающий список с результатами -->
@@ -71,8 +75,9 @@
                     <li class="accessibility-item">
                         <!-- Кнопка доступности -->
                         <div class="accessibility-toggle">
-                            <button @click="toggleAccessibilityMenu" aria-label="Настройки доступности" class="accessibility-button">
+                            <button @click="toggleAccessibilityMenu" class="accessibility-button">
                                 <i class="accessibility-icon">👁️</i>
+                                <span class="sr-only">Настройки доступности</span>
                             </button>
                             
                             <!-- Выпадающее меню настроек доступности -->
@@ -140,7 +145,10 @@
             <!-- Мобильная навигация без дропдауна -->
             <nav class="mobile-nav" :class="{ 'mobile-open': mobileMenuOpen }">
                 <div class="mobile-nav-header">
-                    <button class="mobile-close" @click="toggleMobileMenu">&times;</button>
+                    <button class="mobile-close" @click="toggleMobileMenu">
+                        &times;
+                        <span class="sr-only">Закрыть меню</span>
+                    </button>
                 </div>
                 <ul>
                     <li><router-link to="/catalog" @click="closeMobileMenu">Каталог</router-link></li>
@@ -1190,11 +1198,10 @@ header {
     }
     
     .mobile-nav {
-        display: block;
+        display: none;
         position: fixed;
         top: 0;
-        right: -100%;
-        width: 85%;
+        right: -289px;
         max-width: 360px;
         height: 100vh;
         background: white;
@@ -1206,6 +1213,7 @@ header {
     }
     
     .mobile-nav.mobile-open {
+        display: block !important;
         transform: translateX(-100%);
     }
     

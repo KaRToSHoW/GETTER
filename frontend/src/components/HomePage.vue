@@ -101,7 +101,7 @@
             <p v-if="categories.length === 0" class="no-data">Нет доступных категорий.</p>
         </div>
 
-        <h2 class="home-title">Популярные товары</h2>
+        <h2 class="home-title" id="popular-products">Популярные товары</h2>
         <div class="products-container">
             <button class="nav-button prev-button popular-prev">❮</button>
             <swiper class="products-swiper"

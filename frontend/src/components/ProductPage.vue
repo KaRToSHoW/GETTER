@@ -60,9 +60,15 @@
                     </div>
                     <div class="button-group">
                         <div v-if="cartItems[product.id]" class="quantity-controls">
-                            <button @click="decreaseQuantity(product)" class="quantity-button">-</button>
+                            <button @click="decreaseQuantity(product)" class="quantity-button">
+                                -
+                                <span class="sr-only">Уменьшить количество</span>
+                            </button>
                             <span class="quantity">{{ cartItems[product.id] }}</span>
-                            <button @click="increaseQuantity(product)" class="quantity-button">+</button>
+                            <button @click="increaseQuantity(product)" class="quantity-button">
+                                +
+                                <span class="sr-only">Увеличить количество</span>
+                            </button>
                         </div>
                         <button v-else @click="addToCart(product)" class="add-to-cart-button"
                             :disabled="!product.is_available">
@@ -71,6 +77,7 @@
                         <button :class="['wishlist-button', { 'active': isInWishlist(product.id) }]"
                             @click="toggleWishlist(product)">
                             <span class="heart-icon">❤️</span>
+                            <span class="sr-only">{{ isInWishlist(product.id) ? 'Удалить из избранного' : 'Добавить в избранное' }}</span>
                         </button>
                     </div>
                 </div>
@@ -145,6 +152,7 @@
                             class="delete-review-button"
                         >
                             ✖
+                            <span class="sr-only">Удалить отзыв</span>
                         </button>
                         <button 
                             v-if="canEditReview(review)" 
@@ -152,6 +160,7 @@
                             class="edit-review-button"
                         >
                             ✎
+                            <span class="sr-only">Редактировать отзыв</span>
                         </button>
                     </div>
                     <div class="review-rating">
