@@ -42,10 +42,16 @@
                     </div>
 
                     <div class="quantity-control">
-                        <button @click="decreaseQuantity(item)" class="quantity-button">-</button>
+                        <button @click="decreaseQuantity(item)" class="quantity-button">
+                            -
+                            <span class="sr-only">Уменьшить количество</span>
+                        </button>
                         <input type="number" v-model.number="item.quantity" @change="updateQuantity(item)" min="1"
                             class="quantity-input" />
-                        <button @click="increaseQuantity(item)" class="quantity-button">+</button>
+                        <button @click="increaseQuantity(item)" class="quantity-button">
+                            +
+                            <span class="sr-only">Увеличить количество</span>
+                        </button>
                     </div>
                     <div class="price-container">
                         <p v-if="item.product.discount > 0" class="old-price"><s>{{ item.product.price * item.quantity }} ₽</s></p>
@@ -56,9 +62,11 @@
                     <button @click="toggleWishlist(item.product)"
                         :class="['wishlist-button', { 'active': isInWishlist(item.product.id) }]">
                         <span class="heart-icon">❤️</span>
+                        <span class="sr-only">{{ isInWishlist(item.product.id) ? 'Удалить из избранного' : 'Добавить в избранное' }}</span>
                     </button>
                     <button @click="removeFromCart(item.id)" class="remove-button">
                         <span class="trash-icon">🗑️</span>
+                        <span class="sr-only">Удалить из корзины</span>
                     </button>
                 </div>
             </div>

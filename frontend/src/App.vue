@@ -1,19 +1,27 @@
 <template>
   <div>
+    <!-- Skip link для доступности -->
+    <a href="javascript:void(0)" class="skip-link" @click="scrollToMainContent">Перейти к основному содержимому</a>
+    
     <!-- Хедер -->
     <AppHeader />
 
     <!-- Основной контент -->
-    <router-view></router-view>
+    <main id="main-content" tabindex="-1">
+      <router-view></router-view>
+    </main>
   </div>
 </template>
 
 <style>
 :root {
+    /* Установка базового размера шрифта 62.5% от 16px = 10px */
+    font-size: 62.5%;
+    
     /* Базовые CSS переменные для настроек доступности */
-    --font-size: 16px;
+    --font-size: 1.6rem;
     --font-family: 'Arial', sans-serif;
-    --letter-spacing: 0px;
+    --letter-spacing: 0;
     --line-height: 1.5;
     
     /* Дефолтные цвета */
@@ -22,6 +30,35 @@
     --link-color: #6b46c1;
     --border-color: #dddddd;
     --heading-color: #222222;
+}
+
+/* Skip link для доступности */
+.skip-link {
+    position: absolute;
+    top: -4rem;
+    left: 0;
+    background: #6b46c1;
+    color: white;
+    padding: 0.8rem 1.6rem;
+    z-index: 9999;
+    transition: top 0.3s;
+}
+
+.skip-link:focus {
+    top: 0;
+}
+
+/* Класс для скрытого текста (screen reader only) */
+.sr-only {
+    position: absolute;
+    width: 0.1rem;
+    height: 0.1rem;
+    padding: 0;
+    margin: -0.1rem;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 /* Применяем переменные к основным элементам */
@@ -130,6 +167,15 @@ export default {
       }
     };
     
+    // Функция для скип линка
+    const scrollToMainContent = () => {
+      const mainContent = document.getElementById('main-content');
+      if (mainContent) {
+        mainContent.focus();
+        mainContent.scrollIntoView({ behavior: 'smooth' });
+      }
+    };
+    
     // Настройка перехватчиков запросов для автоматической обработки ошибок аутентификации
     const setupAxiosInterceptors = () => {
       // Добавляем перехватчик ответов
@@ -206,7 +252,8 @@ export default {
 
     return {
       isAuthenticated,
-      logout
+      logout,
+      scrollToMainContent
     };
   }
 };
