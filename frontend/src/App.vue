@@ -10,6 +10,9 @@
     <main id="main-content" tabindex="-1">
       <router-view></router-view>
     </main>
+    
+    <!-- Футер -->
+    <AppFooter />
   </div>
 </template>
 
@@ -68,8 +71,9 @@ body {
     letter-spacing: var(--letter-spacing) !important;
     line-height: var(--line-height) !important;
     color: var(--text-color);
-    background-color: var(--bg-color);
+    background: linear-gradient(135deg, #f8fafc 0%, #f3f4f6 100%);
     transition: all 0.3s ease;
+    min-height: 100vh;
 }
 
 /* Основной текст - используем !important для переопределения */
@@ -117,6 +121,7 @@ body.dark {
     --link-color: #bb86fc;
     --border-color: #333333;
     --heading-color: #e0e0e0;
+    background: linear-gradient(135deg, #121212 0%, #1e1e1e 100%);
 }
 
 /* Бежевая схема */
@@ -126,6 +131,7 @@ body.beige {
     --link-color: #8b4513;
     --border-color: #d2b48c;
     --heading-color: #654321;
+    background: linear-gradient(135deg, #f5f5dc 0%, #f0e6c9 100%);
 }
 
 /* Голубая схема */
@@ -135,6 +141,7 @@ body.blue {
     --link-color: #0000ff;
     --border-color: #add8e6;
     --heading-color: #000080;
+    background: linear-gradient(135deg, #e6f2ff 0%, #d4e8ff 100%);
 }
 </style>
 
@@ -143,13 +150,15 @@ import './assets/css/reset.css';
 
 import { provide, ref, onMounted } from 'vue';
 import AppHeader from './components/AppHeader.vue';
+import AppFooter from './components/AppFooter.vue';
 import { useRouter } from 'vue-router'; 
 import axios from 'axios';
 
 export default {
   name: 'App',
   components: {
-    AppHeader
+    AppHeader,
+    AppFooter
   },
   setup() {
     const isAuthenticated = ref(false);

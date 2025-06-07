@@ -6,7 +6,7 @@ from .views import (
     get_cart, add_to_cart, remove_from_cart, ProductDetailView, 
     ReviewListCreateView, get_favorites, user_orders, 
     popular_wishlist_products, user_activity, advanced_product_search,
-    new_products, popular_products
+    new_products, popular_products, recent_reviews
 )
 
 urlpatterns = [
@@ -31,4 +31,5 @@ urlpatterns = [
     path('api/user-activity/<int:user_id>/', user_activity, name='user_activity'),
     path('api/user-activity/', user_activity, name='user_activity'),
     path('products/search/advanced/', advanced_product_search, name='advanced-product-search'),
+    path('recent-reviews/', recent_reviews, name='recent_reviews'),
 ]
