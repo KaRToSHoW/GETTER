@@ -555,3 +555,35 @@ def popular_products(request):
     
     serializer = ProductSerializer(popular_products, many=True, context={'request': request})
     return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def recent_reviews(request):
+    """Получение последних отзывов пользователей"""
+    # Получаем последние отзывы с информацией о продуктах и пользователях
+    reviews = Review.objects.select_related('product', 'user').order_by('-created_at')[:10]
+    
+    # Создаем расширенный ответ
+    response_data = []
+    for review in reviews:
+        review_data = {
+            'id': review.id,
+            'rating': review.rating,
+            'comment': review.comment,
+            'pros': review.pros,
+            'cons': review.cons,
+            'created_at': review.created_at,
+            'product': {
+                'id': review.product.id,
+                'name': review.product.name,
+                'image': review.product.image.url if review.product.image else None,
+            },
+            'user': {
+                'id': review.user.id,
+                'username': review.user.username,
+                'profile_image': review.user.get_profile_image_url() if hasattr(review.user, 'get_profile_image_url') else None,
+            }
+        }
+        response_data.append(review_data)
+    
+    return Response(response_data)
