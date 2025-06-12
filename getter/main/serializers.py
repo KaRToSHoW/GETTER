@@ -56,10 +56,17 @@ class ProductSerializer(serializers.ModelSerializer):
 
 class OrderItemSerializer(serializers.ModelSerializer):
     product = ProductSerializer(read_only=True)
+    price = serializers.SerializerMethodField()
 
     class Meta:
         model = OrderItem
         fields = ['id', 'order', 'product', 'quantity', 'price']
+
+    def get_price(self, obj):
+        """Вычисляет итоговую цену за позицию заказа"""
+        if obj.product:
+            return float(obj.product.price * obj.quantity)
+        return 0.0
 
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)

@@ -189,13 +189,16 @@
                                                 <span class="order-value">{{ formatOrderDate(order.date) }}</span>
                                             </div>
                                         </div>
-                                        <div class="order-status" :class="`status-${order.status.toLowerCase()}`">
-                                            {{ order.status }}
+                                        <div class="order-status" :class="`status-${mapStatusClass(order.status)}`">
+                                            {{ getOrderStatusText(order.status) }}
                                         </div>
                                     </div>
                                     
                                     <div class="order-products">
                                         <div v-for="item in order.items" :key="item.id" class="order-product">
+                                            <div class="product-image" v-if="item.image">
+                                                <img :src="`${apiBaseUrl}${item.image}`" :alt="item.name" />
+                                            </div>
                                             <div class="product-info">
                                                 <div class="product-name">{{ item.name }}</div>
                                                 <div class="product-quantity">{{ item.quantity }} шт.</div>
@@ -290,7 +293,7 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import axios from 'axios';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { inject } from 'vue';
 import defaultImage from '@/assets/img/default_profile_image.png';
 
@@ -298,6 +301,7 @@ const user = ref(null);
 const isEditing = ref(false);
 const activeTab = ref('profile'); // Активная вкладка
 const router = useRouter();
+const route = useRoute();
 const logout = inject('logout');
 const currentUser = ref(null);
 const apiBaseUrl = 'http://127.0.0.1:8000';
@@ -314,6 +318,12 @@ const statistics = ref({
 });
 
 onMounted(async () => {
+    // Проверяем URL-параметры для установки активной вкладки
+    const tabParam = route.query.tab;
+    if (tabParam && ['profile', 'orders', 'favorites', 'notifications'].includes(tabParam)) {
+        activeTab.value = tabParam;
+    }
+    
     await loadCurrentUser();
     await loadUserProfile();
     await loadOrders();
@@ -368,38 +378,14 @@ const loadOrders = async () => {
         
         console.log('Получены данные заказов:', response.data);
         
-        // Проверяем формат данных (данные могут прийти в разных форматах)
-        if (Array.isArray(response.data)) {
-            // Если данные - массив заказов
-            processOrdersArray(response.data);
-        } else if (response.data && typeof response.data === 'object') {
-            // Формат: {pending_orders, completed_orders, canceled_orders, total_spent}
-            if (response.data.pending_orders || response.data.completed_orders || response.data.canceled_orders) {
-                const allOrders = [
-                    ...(Array.isArray(response.data.pending_orders) ? response.data.pending_orders : []),
-                    ...(Array.isArray(response.data.completed_orders) ? response.data.completed_orders : []),
-                    ...(Array.isArray(response.data.canceled_orders) ? response.data.canceled_orders : [])
-                ];
-                
-                if (allOrders.length > 0) {
-                    processOrdersArray(allOrders);
-                    
-                    // Если пришла общая сумма покупок, обновим статистику
-                    if (typeof response.data.total_spent === 'number') {
-                        statistics.value.totalSpent = response.data.total_spent;
-                    }
-                    return;
-                }
-            }
+        // Проверяем наличие массива заказов в ответе
+        if (response.data && Array.isArray(response.data.orders)) {
+            orders.value = response.data.orders;
             
-            // Формат: {results: [...]}
-            if (Array.isArray(response.data.results)) {
-                processOrdersArray(response.data.results);
-                return;
+            // Обновляем статистику, если пришли данные о сумме покупок
+            if (typeof response.data.total_spent === 'number') {
+                statistics.value.totalSpent = response.data.total_spent;
             }
-            
-            console.error('Данные заказов не в ожидаемом формате:', response.data);
-            loadFallbackOrders();
         } else {
             console.error('Данные заказов не в ожидаемом формате:', response.data);
             loadFallbackOrders();
@@ -409,27 +395,6 @@ const loadOrders = async () => {
         console.error('Детали ошибки:', error.response ? error.response.data : 'Нет данных ответа');
         loadFallbackOrders();
     }
-};
-
-// Обработка массива заказов
-const processOrdersArray = (ordersArray) => {
-    orders.value = ordersArray.map(order => ({
-        id: order.id,
-        number: order.order_number || `ORDER-${order.id}`,
-        date: new Date(order.created_at),
-        status: mapOrderStatus(order.status),
-        total: parseFloat(order.total_price),
-        items: Array.isArray(order.items) ? order.items.map(item => ({
-            id: item.id,
-            name: item.product ? 
-                (typeof item.product === 'object' ? item.product.name : 'Товар') : 
-                'Товар',
-            price: item.product ? 
-                (typeof item.product === 'object' ? parseFloat(item.product.price) : 0) : 
-                0,
-            quantity: item.quantity
-        })) : []
-    }));
 };
 
 // Загрузка тестовых данных заказов
@@ -470,8 +435,13 @@ const loadFallbackOrders = () => {
     ];
 };
 
-// Преобразование статуса заказа из API в читаемый формат
-const mapOrderStatus = (status) => {
+// Преобразование статуса заказа в CSS-класс
+const mapStatusClass = (status) => {
+    return status.toLowerCase().replace(/\s+/g, '-');
+};
+
+// Получение текстового представления статуса заказа
+const getOrderStatusText = (status) => {
     const statusMap = {
         'pending': 'Ожидает',
         'assembling': 'В сборке',
@@ -535,7 +505,7 @@ const calculateStatistics = () => {
     
     // Считаем количество товаров и общую сумму
     orders.value.forEach(order => {
-        if (order.status === 'Доставлен' || order.status === 'В пути') {
+        if (order.status === 'shipped' || order.status === 'delivered') {
             order.items.forEach(item => {
                 totalItems += item.quantity;
             });
@@ -546,7 +516,7 @@ const calculateStatistics = () => {
     statistics.value = {
         orderCount: orders.value.length,
         productCount: totalItems,
-        totalSpent: totalSpent,
+        totalSpent: totalSpent || statistics.value.totalSpent, // Используем значение из API, если оно есть
         favoritesCount: favorites.value.length
     };
 };
@@ -630,6 +600,9 @@ const canEditProfile = () => {
 // Переключение активной вкладки
 const setActiveTab = (tab) => {
     activeTab.value = tab;
+    
+    // Обновляем URL для возможности прямого доступа к вкладке
+    router.replace({ query: { ...route.query, tab } });
 };
 
 // Переход на просмотр деталей заказа
@@ -1110,24 +1083,29 @@ const removeImage = async () => {
     font-weight: 600;
 }
 
-.status-доставлен {
+.status-доставлен, .status-delivered {
     background-color: #c6f6d5;
     color: #22543d;
 }
 
-.status-в.пути {
+.status-в-пути, .status-shipped {
     background-color: #bee3f8;
     color: #2a4365;
 }
 
-.status-обработка {
+.status-обработка, .status-assembling {
     background-color: #fed7d7;
     color: #822727;
 }
 
-.status-отменен {
+.status-отменен, .status-canceled {
     background-color: #e2e8f0;
     color: #4a5568;
+}
+
+.status-pending {
+    background-color: #feebc8;
+    color: #7b341e;
 }
 
 .order-products {
@@ -1136,14 +1114,30 @@ const removeImage = async () => {
 
 .order-product {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
     padding: 10px 0;
     border-bottom: 1px dashed #e2e8f0;
 }
 
 .order-product:last-child {
     border-bottom: none;
+}
+
+.product-image {
+    width: 50px;
+    height: 50px;
+    flex-shrink: 0;
+    margin-right: 15px;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+}
+
+.product-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .product-info {

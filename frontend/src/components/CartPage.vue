@@ -134,8 +134,10 @@ import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 import { inject } from 'vue';
 import ToastNotification from './ToastNotification.vue';
+import { useRouter } from 'vue-router';
 
 const $apiBaseUrl = inject('$apiBaseUrl', 'http://127.0.0.1:8000');
+const router = useRouter();
 
 const cart = ref({ items: [], total_price: 0 });
 const selectedItems = ref([]);
@@ -688,76 +690,27 @@ const checkout = async () => {
             return;
         }
 
-        // Получаем выбранные товары для заказа
-        const selectedItemsData = cart.value.items
-            .filter(item => selectedItems.value.includes(item.id))
-            .map(item => ({
-                id: item.id,
-                product_id: item.product.id,
-                product_name: item.product.name,
-                product_sku: item.product.sku,
-                quantity: item.quantity,
-                price: item.product.price,
-                total: item.product.price * item.quantity,
-                image: item.product.image
-            }));
-            
-        console.log('Выбранные товары для заказа:', selectedItemsData);
-        
-        // Собираем данные заказа
-        const orderData = {
-            items: selectedItemsData,
-            total: getTotal.value,
-            promocode: promoCode.value || null,
-            discount: promoDiscount.value,
-            date: new Date().toISOString(),
-            status: 'new' // Начальный статус заказа
-        };
-        
+        // Если выбраны не все товары, удаляем невыбранные из корзины
+        const nonSelectedItems = cart.value.items.filter(item => !selectedItems.value.includes(item.id));
+        if (nonSelectedItems.length > 0) {
+            for (const item of nonSelectedItems) {
+                try {
+                    await removeFromCart(item.id);
+                } catch (error) {
+                    console.error(`Ошибка при удалении товара ${item.id}:`, error);
+                }
+            }
+        }
+
         toast.value.showToast('Оформление заказа...', 'info');
         
         try {
-            // Имитация запроса на сервер для создания заказа
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            console.log('Создание заказа:', orderData);
-            
-            // В реальном приложении здесь был бы API-запрос примерно такого вида:
-            /*
-            const orderResponse = await axios.post(`${$apiBaseUrl}/main/orders/create/`, orderData, {
+            // Вызываем API для создания заказа
+            const response = await axios.post(`${$apiBaseUrl}/main/orders/create/`, {}, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            const orderId = orderResponse.data.id;
-            console.log('Заказ создан, ID:', orderId);
-            */
             
-            // Имитация успешного создания заказа
-            const mockOrderId = Date.now().toString();
-            console.log('Имитация создания заказа, ID:', mockOrderId);
-            
-            // Обновление количества товаров и их статуса
-            const stockUpdatePromises = selectedItemsData.map(item => {
-                return updateProductStock(item.product_id, item.quantity);
-            });
-            
-            // Ждем завершения всех обновлений
-            await Promise.all(stockUpdatePromises);
-            
-            // Сохраняем заказ в истории пользователя
-            await saveOrderToHistory(mockOrderId, orderData);
-            
-            // Копируем массив выбранных ID товаров
-            const orderedItems = [...selectedItems.value];
-            
-            // Удаляем товары из корзины последовательно
-            let hasErrors = false;
-            for (const itemId of orderedItems) {
-                try {
-                    await removeFromCart(itemId);
-                } catch (error) {
-                    console.error(`Ошибка при удалении товара ${itemId}:`, error);
-                    hasErrors = true;
-                }
-            }
+            console.log('Заказ успешно создан:', response.data);
             
             // Очищаем выбранные товары
             selectedItems.value = [];
@@ -767,108 +720,23 @@ const checkout = async () => {
             promoDiscount.value = 0;
             promoError.value = '';
             
-            if (hasErrors) {
-                toast.value.showToast('Заказ оформлен, но возникли проблемы с обновлением корзины', 'warning');
-            } else {
-                toast.value.showToast('Заказ успешно оформлен! Номер заказа: ' + mockOrderId, 'success');
-            }
+            // Перезагружаем корзину
+            await loadCartData();
             
-            console.log('Заказ успешно оформлен');
+            toast.value.showToast(`Заказ успешно оформлен! Номер заказа: ${response.data.order_number}`, 'success');
+            
+            // Перенаправляем на страницу профиля с историей заказов
+            router.push('/profile?tab=orders');
             
         } catch (error) {
             console.error('Ошибка создания заказа:', error);
-            toast.value.showToast('Ошибка при оформлении заказа', 'error');
+            const errorMessage = error.response?.data?.error || 'Ошибка при оформлении заказа';
+            toast.value.showToast(errorMessage, 'error');
         }
     } catch (error) {
         console.error('Ошибка оформления заказа:', error);
         console.error('Детали ошибки:', error.response ? error.response.data : error.message);
         toast.value.showToast('Ошибка при оформлении заказа', 'error');
-    }
-};
-
-// Функция для обновления остатка товара
-const updateProductStock = async (productId, quantity) => {
-    try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-        
-        console.log(`Обновление количества товара ${productId}, уменьшение на ${quantity}`);
-        
-        // В реальном приложении здесь был бы API-запрос:
-        /*
-        const response = await axios.post(`${$apiBaseUrl}/main/products/update-stock/`, {
-            product_id: productId,
-            quantity_change: -quantity // Отрицательное значение, так как уменьшаем
-        }, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        const updatedProduct = response.data;
-        console.log('Обновлено количество товара:', updatedProduct);
-        
-        if (updatedProduct.stock <= 0) {
-            console.log('Товар закончился, статус изменен на "Распродано"');
-        }
-        */
-        
-        // Имитация обновления количества товаров
-        console.log(`Имитация: уменьшение количества товара ${productId} на ${quantity}`);
-        await new Promise(resolve => setTimeout(resolve, 200));
-        return true;
-    } catch (error) {
-        console.error('Ошибка обновления количества товара:', error);
-        return false;
-    }
-};
-
-// Функция для сохранения заказа в истории пользователя
-const saveOrderToHistory = async (orderId, orderData) => {
-    try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-        
-        console.log('Сохранение заказа в истории пользователя, ID:', orderId);
-        
-        // В реальном приложении здесь был бы API-запрос:
-        /*
-        const response = await axios.post(`${$apiBaseUrl}/main/user/order-history/add/`, {
-            order_id: orderId,
-            order_data: orderData
-        }, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        console.log('Заказ сохранен в истории:', response.data);
-        */
-        
-        // Имитация сохранения заказа в истории
-        console.log('Имитация: сохранение заказа в истории пользователя');
-        
-        // Можно было бы использовать localStorage для сохранения истории заказов
-        let orderHistory = [];
-        try {
-            const savedHistory = localStorage.getItem('orderHistory');
-            if (savedHistory) {
-                orderHistory = JSON.parse(savedHistory);
-            }
-        } catch (e) {
-            console.error('Ошибка при чтении истории заказов:', e);
-        }
-        
-        // Добавляем новый заказ
-        orderHistory.push({
-            id: orderId,
-            ...orderData
-        });
-        
-        // Сохраняем обновленную историю
-        localStorage.setItem('orderHistory', JSON.stringify(orderHistory));
-        console.log('История заказов обновлена');
-        
-        return true;
-    } catch (error) {
-        console.error('Ошибка сохранения заказа в истории:', error);
-        return false;
     }
 };
 
