@@ -32,7 +32,9 @@
                         class="cart-item-image" />
                 </div>
                 <div class="cart-item-details">
-                    <h3>{{ item.product.name }}</h3>
+                    <router-link :to="`/product/${item.product.id}`" class="cart-item-name">
+                        {{ item.product.name }}
+                    </router-link>
                     <p class="cart-item-sku">Артикул: {{ item.product.sku }}</p>
                     <p class="cart-item-category">Категория: {{ item.product.category.name }}</p>
                     <div v-if="item.product.specifications" class="specifications">
@@ -54,8 +56,9 @@
                         </button>
                     </div>
                     <div class="price-container">
-                        <p v-if="item.product.discount > 0" class="old-price"><s>{{ item.product.price * item.quantity }} ₽</s></p>
-                        <p class="cart-item-price">{{ (item.product.discount > 0 ? item.product.discounted_price : item.product.price) * item.quantity }} ₽</p>
+                        <span v-if="item.product.discount > 0" class="original-price">{{ formatPrice(item.product.price) }}</span>
+                        <span class="current-price">{{ formatPrice(item.product.discounted_price) }}</span>
+                        <span v-if="item.product.discount > 0" class="discount-badge">-{{ item.product.discount }}%</span>
                     </div>
                 </div>
                 <div class="cart-item-actions">
@@ -72,17 +75,27 @@
             </div>
             <div class="cart-total">
                 <div class="cart-summary">
-                    <div class="summary-row">
-                        <span>Товары ({{ getSelectedItemsCount }})</span>
-                        <span>{{ formatPrice(getSubtotal) }} ₽</span>
-                    </div>
-                    <div v-if="getTotalDiscount > 0" class="summary-row discount">
-                        <span>Скидка</span>
-                        <span>-{{ formatPrice(getTotalDiscount) }} ₽</span>
-                    </div>
-                    <div class="summary-row total">
-                        <span>Итого</span>
-                        <span>{{ formatPrice(getTotal) }} ₽</span>
+                    <h3>Итого</h3>
+                    <div class="summary-content">
+                        <div class="summary-row">
+                            <span>Товары ({{ getSelectedItemsCount }})</span>
+                            <span>{{ formatPrice(calculateSelectedOriginalTotal()) }}</span>
+                        </div>
+                        <div v-if="calculateTotalDiscount() > 0" class="summary-row discount">
+                            <span>Скидка</span>
+                            <span>-{{ formatPrice(calculateTotalDiscount()) }}</span>
+                        </div>
+                        <div class="summary-row total">
+                            <span>Итого к оплате</span>
+                            <span>{{ formatPrice(calculateSelectedTotal()) }}</span>
+                        </div>
+                        <button 
+                            class="checkout-button" 
+                            :disabled="selectedItems.length === 0"
+                            @click="checkout"
+                        >
+                            Оформить заказ
+                        </button>
                     </div>
                 </div>
                 <div class="promo-code-container">
@@ -110,9 +123,6 @@
                     <router-link to="/catalog" class="continue-shopping-btn">
                         Продолжить покупки
                     </router-link>
-                    <button class="checkout-button" @click="checkout" :disabled="selectedItems.length === 0">
-                        Оформить заказ
-                    </button>
                 </div>
             </div>
         </div>
@@ -599,7 +609,13 @@ const toggleSelectAll = () => {
 };
 
 const getSelectedItemsCount = computed(() => {
-    return selectedItems.value.length;
+    let count = 0;
+    cart.value.items.forEach(item => {
+        if (selectedItems.value.includes(item.id)) {
+            count += item.quantity;
+        }
+    });
+    return count;
 });
 
 const getSubtotal = computed(() => {
@@ -612,19 +628,7 @@ const getSubtotal = computed(() => {
     return total;
 });
 
-const getTotalDiscount = computed(() => {
-    let totalDiscount = 0;
-    cart.value.items.forEach(item => {
-        if (selectedItems.value.includes(item.id)) {
-            if (item.product.discount > 0) {
-                // Расчет скидки: процент от цены
-                const discount = (item.product.price * item.product.discount / 100) * item.quantity;
-                totalDiscount += discount;
-            }
-        }
-    });
-    return totalDiscount;
-});
+
 
 const getTotal = computed(() => {
     return getSubtotal.value - promoDiscount.value;
@@ -634,7 +638,31 @@ const formatPrice = (price) => {
     return Number(price).toLocaleString('ru-RU', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
+    }) + ' ₽';
+};
+
+const calculateSelectedOriginalTotal = () => {
+    let total = 0;
+    cart.value.items.forEach(item => {
+        if (selectedItems.value.includes(item.id)) {
+            total += item.product.price * item.quantity;
+        }
     });
+    return total;
+};
+
+const calculateSelectedTotal = () => {
+    let total = 0;
+    cart.value.items.forEach(item => {
+        if (selectedItems.value.includes(item.id)) {
+            total += item.product.discounted_price * item.quantity;
+        }
+    });
+    return total;
+};
+
+const calculateTotalDiscount = () => {
+    return calculateSelectedOriginalTotal() - calculateSelectedTotal();
 };
 
 const clearCart = async () => {
@@ -1039,18 +1067,27 @@ onMounted(async () => {
     gap: 12px;
 }
 
-.old-price {
+.original-price {
     font-size: 16px;
     color: #e74c3c;
     text-decoration: line-through;
     margin: 0;
 }
 
-.cart-item-price {
+.current-price {
     font-size: 22px;
     color: #27ae60;
     font-weight: 700;
     margin: 0;
+}
+
+.discount-badge {
+    background-color: #e74c3c;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    margin-left: 5px;
 }
 
 .cart-item-actions {
@@ -1218,6 +1255,12 @@ onMounted(async () => {
 
 .cart-summary {
     margin-bottom: 15px;
+}
+
+.summary-content {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
 .summary-row {

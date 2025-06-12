@@ -431,8 +431,9 @@ def create_order(request):
         total_price = Decimal('0.00')
         print("Расчет итоговой суммы заказа:")
         for item in cart.items.all():
-            item_price = item.product.price * item.quantity
-            print(f"Товар: {item.product.name}, Количество: {item.quantity}, Цена за ед.: {item.product.price}, Итого: {item_price}")
+            # Используем метод get_discounted_price для учета скидки
+            item_price = item.product.get_discounted_price() * item.quantity
+            print(f"Товар: {item.product.name}, Количество: {item.quantity}, Цена за ед.: {item.product.get_discounted_price()} (скидка {item.product.discount}%), Итого: {item_price}")
             total_price += item_price
             
         print(f"Итоговая сумма заказа: {total_price}")

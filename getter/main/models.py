@@ -82,11 +82,12 @@ class Order(models.Model):
         verbose_name_plural = "Заказы"
 
     def calculate_total_price(self):
-        """Вычисляет общую стоимость заказа на основе товаров в корзине"""
+        """Вычисляет общую стоимость заказа на основе товаров в корзине с учетом скидок"""
         total = Decimal('0.00')
         for item in self.items.all():
             if item.product:
-                total += item.product.price * item.quantity
+                # Используем метод get_discounted_price для учета скидки
+                total += item.product.get_discounted_price() * item.quantity
         return total
 
     def save(self, *args, **kwargs):
@@ -138,9 +139,9 @@ class OrderItem(models.Model):
         
     @property
     def price(self):
-        """Вычисляет итоговую цену за позицию заказа"""
+        """Вычисляет итоговую цену за позицию заказа с учетом скидки"""
         if self.product:
-            return self.product.price * self.quantity
+            return self.product.get_discounted_price() * self.quantity
         return 0
         
     def __str__(self):
