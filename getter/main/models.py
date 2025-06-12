@@ -2,6 +2,7 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 from django.urls import reverse
+from decimal import Decimal
 
 class Category(models.Model):
     name = models.CharField(max_length=255, unique=True, verbose_name="Категория")
@@ -81,15 +82,28 @@ class Order(models.Model):
         verbose_name_plural = "Заказы"
 
     def calculate_total_price(self):
-        return sum(item.price for item in self.items.all())
+        """Вычисляет общую стоимость заказа на основе товаров в корзине"""
+        total = Decimal('0.00')
+        for item in self.items.all():
+            if item.product:
+                total += item.product.price * item.quantity
+        return total
 
     def save(self, *args, **kwargs):
-        # Генерация номера заказа
-        if not self.order_number:
-            self.order_number = f"ORDER{self.id:05d}" 
-        if self.pk:
-            self.total_price = self.calculate_total_price()
-        super().save(*args, **kwargs)
+        is_new = self.pk is None
+        super().save(*args, **kwargs)  # Сначала сохраняем объект, чтобы получить ID
+        
+        # Генерация номера заказа только для новых объектов
+        if is_new and not self.order_number:
+            self.order_number = f"ORDER{self.id:05d}"
+            super().save(update_fields=['order_number'])  # Сохраняем только поле order_number
+            
+        # Обновляем total_price только если объект уже существует и имеет товары
+        if not is_new:
+            new_total = self.calculate_total_price()
+            if self.total_price != new_total:
+                self.total_price = new_total
+                super().save(update_fields=['total_price'])  # Сохраняем только поле total_price
 
     def __str__(self):
         return f"Заказ №{self.order_number}" 
@@ -121,13 +135,16 @@ class OrderItem(models.Model):
     class Meta:
         verbose_name = "Позиция заказа"
         verbose_name_plural = "Позиции заказов"
-
-    def __str__(self):
-        return f"{self.quantity} x {self.product.name}"
-
+        
     @property
     def price(self):
-        return self.product.price * self.quantity  # Цена = количество * цена товара
+        """Вычисляет итоговую цену за позицию заказа"""
+        if self.product:
+            return self.product.price * self.quantity
+        return 0
+        
+    def __str__(self):
+        return f"{self.product.name} x {self.quantity} в заказе №{self.order.id}"
 
 
 class Review(models.Model):

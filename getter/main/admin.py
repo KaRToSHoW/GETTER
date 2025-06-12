@@ -56,7 +56,7 @@ class OrderItemInline(admin.TabularInline):
 
     @admin.display(description='Итоговая цена')
     def get_total_price(self, obj):
-        return obj.price
+        return obj.product.price * obj.quantity
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
@@ -171,7 +171,7 @@ class OrderItemAdmin(admin.ModelAdmin):
 
     @admin.display(description='Итоговая цена')
     def get_total_price(self, obj):
-        return obj.price
+        return obj.product.price * obj.quantity
 
 
 @admin.register(Review)

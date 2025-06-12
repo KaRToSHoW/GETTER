@@ -8,6 +8,8 @@ from django.db.models import Q, Avg, Count, Sum
 from .models import Category, Product, Wishlist, Order, OrderItem, Review
 from .serializers import CategorySerializer, ProductSerializer, OrderSerializer, OrderItemSerializer, ReviewSerializer, WishlistSerializer
 from django.utils import timezone
+import random
+from decimal import Decimal
 
 class CategoryListView(APIView):
     permission_classes = [AllowAny]
@@ -239,7 +241,17 @@ def check_wishlist(request):
 @permission_classes([IsAuthenticated])
 def get_cart(request):
     try:
-        order = Order.objects.filter(user=request.user, status='pending').first()
+        # Проверяем, есть ли у пользователя несколько корзин
+        pending_orders = Order.objects.filter(user=request.user, status='pending')
+        if pending_orders.count() > 1:
+            # Если их несколько, оставляем только самую последнюю, остальные удаляем
+            latest_order = pending_orders.order_by('-created_at').first()
+            pending_orders.exclude(id=latest_order.id).delete()
+            print(f"Удалены лишние корзины, оставлена корзина с ID: {latest_order.id}")
+            order = latest_order
+        else:
+            order = pending_orders.first()
+
         total_orders_sum = Order.objects.filter(user=request.user).aggregate(total_sum=Sum('total_price'))['total_sum'] or 0
 
         if not order:
@@ -274,19 +286,28 @@ def add_to_cart(request):
             print("Ошибка: недостаточно товара на складе")
             return Response({'error': 'Недостаточно товара на складе'}, status=status.HTTP_400_BAD_REQUEST)
 
-        order, created = Order.objects.get_or_create(user=request.user, status='pending')
-        print(f"Текущий заказ: {order.id}, создан ли новый: {created}")
+        # Проверяем, есть ли у пользователя несколько корзин (заказов со статусом pending)
+        pending_orders = Order.objects.filter(user=request.user, status='pending')
+        if pending_orders.count() > 1:
+            # Если их несколько, оставляем только самую последнюю, остальные удаляем
+            latest_order = pending_orders.order_by('-created_at').first()
+            pending_orders.exclude(id=latest_order.id).delete()
+            print(f"Удалены лишние корзины, оставлена корзина с ID: {latest_order.id}")
+            order = latest_order
+        else:
+            # Если корзины нет или она одна, используем стандартную логику
+            order, created = Order.objects.get_or_create(user=request.user, status='pending')
+            print(f"Текущий заказ: {order.id}, создан ли новый: {created}")
 
         order_item, created = OrderItem.objects.get_or_create(
-        order=order,
-        product=product,
-        defaults={"quantity": quantity}  # Устанавливаем quantity сразу при создании
-    )
+            order=order,
+            product=product,
+            defaults={"quantity": quantity}  # Устанавливаем quantity сразу при создании
+        )
 
         if not created:
             order_item.quantity += quantity  # Если уже есть, увеличиваем количество
             order_item.save()
-
 
         order.save()  # Пересчитываем total_price
         print(f"Итоговая сумма заказа: {order.total_price}")
@@ -302,19 +323,28 @@ def add_to_cart(request):
         print("Ошибка:", str(e))  # Логируем любую другую ошибку
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
 def remove_from_cart(request, item_id):
     try:
-        order_item = OrderItem.objects.get(id=item_id, order__user=request.user, order__status='pending')
-        order = order_item.order
-        order_item.delete()
-        order.save()  # Пересчитывает total_price
-        serializer = OrderSerializer(order)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    except OrderItem.DoesNotExist:
-        return Response({'error': 'Позиция не найдена'}, status=status.HTTP_404_NOT_FOUND)
+        # Проверяем, есть ли у пользователя несколько корзин
+        pending_orders = Order.objects.filter(user=request.user, status='pending')
+        if pending_orders.count() > 1:
+            # Если их несколько, оставляем только самую последнюю, остальные удаляем
+            latest_order = pending_orders.order_by('-created_at').first()
+            pending_orders.exclude(id=latest_order.id).delete()
+            print(f"Удалены лишние корзины, оставлена корзина с ID: {latest_order.id}")
+        
+        # Пытаемся найти товар в корзине
+        try:
+            order_item = OrderItem.objects.get(id=item_id, order__user=request.user, order__status='pending')
+            order = order_item.order
+            order_item.delete()
+            order.save()  # Пересчитывает total_price
+            serializer = OrderSerializer(order)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except OrderItem.DoesNotExist:
+            return Response({'error': 'Позиция не найдена'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -341,32 +371,175 @@ def get_favorites(request):
     serializer = ProductSerializer(products_with_data, many=True, context={'request': request})
     return Response(serializer.data)
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_order(request):
+    """Создание заказа из корзины"""
+    try:
+        print("=== Начало создания заказа ===")
+        print(f"Пользователь: {request.user.username} (ID: {request.user.id})")
+        
+        # Проверяем, есть ли у пользователя несколько корзин
+        pending_orders = Order.objects.filter(user=request.user, status='pending')
+        print(f"Найдено корзин: {pending_orders.count()}")
+        
+        if pending_orders.count() > 1:
+            # Если их несколько, оставляем только самую последнюю, остальные удаляем
+            latest_order = pending_orders.order_by('-created_at').first()
+            pending_orders.exclude(id=latest_order.id).delete()
+            print(f"Удалены лишние корзины, оставлена корзина с ID: {latest_order.id}")
+            cart = latest_order
+        else:
+            cart = pending_orders.first()
+            print(f"Использована существующая корзина с ID: {cart.id if cart else 'Нет'}")
+        
+        if not cart:
+            print("Ошибка: Корзина не найдена")
+            return Response({'error': 'Корзина не найдена'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        if not cart.items.exists():
+            print("Ошибка: Корзина пуста")
+            return Response({'error': 'Корзина пуста'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        print(f"Корзина содержит {cart.items.count()} товаров")
+        
+        # Проверяем доступность всех товаров
+        for item in cart.items.all():
+            print(f"Проверка товара: {item.product.name} (ID: {item.product.id})")
+            print(f"Количество в корзине: {item.quantity}, На складе: {item.product.stock}")
+            
+            if item.quantity > item.product.stock:
+                error_msg = f'Недостаточно товара "{item.product.name}" на складе. Доступно: {item.product.stock}'
+                print(f"Ошибка: {error_msg}")
+                return Response({
+                    'error': error_msg
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Обновляем статус заказа на "в сборке"
+        print("Обновляем статус заказа на 'в сборке'")
+        cart.status = 'assembling'
+        
+        # Генерируем номер заказа, если его нет
+        if not cart.order_number:
+            # Генерируем уникальный номер заказа
+            timestamp = timezone.now().strftime('%Y%m%d%H%M')
+            random_suffix = ''.join([str(random.randint(0, 9)) for _ in range(4)])
+            cart.order_number = f"ORD-{timestamp}-{random_suffix}"
+            print(f"Сгенерирован номер заказа: {cart.order_number}")
+        
+        # Вычисляем итоговую сумму заказа
+        total_price = Decimal('0.00')
+        print("Расчет итоговой суммы заказа:")
+        for item in cart.items.all():
+            item_price = item.product.price * item.quantity
+            print(f"Товар: {item.product.name}, Количество: {item.quantity}, Цена за ед.: {item.product.price}, Итого: {item_price}")
+            total_price += item_price
+            
+        print(f"Итоговая сумма заказа: {total_price}")
+        cart.total_price = total_price
+        
+        # Сохраняем изменения в заказе
+        try:
+            cart.save()
+            print(f"Заказ сохранен с ID: {cart.id}, статус: {cart.status}, сумма: {cart.total_price}")
+        except Exception as save_error:
+            print(f"Ошибка при сохранении заказа: {str(save_error)}")
+            return Response({'error': f'Ошибка при сохранении заказа: {str(save_error)}'}, 
+                           status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # Обновляем количество товаров на складе
+        print("Обновляем количество товаров на складе:")
+        for item in cart.items.all():
+            try:
+                product = item.product
+                old_stock = product.stock
+                product.stock -= item.quantity
+                print(f"Товар: {product.name}, Было: {old_stock}, Стало: {product.stock}")
+                
+                if product.stock <= 0:
+                    product.is_available = False
+                    print(f"Товар {product.name} помечен как недоступный")
+                    
+                product.save()
+            except Exception as product_error:
+                print(f"Ошибка при обновлении товара {item.product.name}: {str(product_error)}")
+                # Продолжаем выполнение, не прерываем процесс
+        
+        # Создаем новую пустую корзину для пользователя
+        try:
+            new_cart = Order.objects.create(user=request.user, status='pending')
+            print(f"Создана новая пустая корзина с ID: {new_cart.id}")
+        except Exception as cart_error:
+            print(f"Ошибка при создании новой корзины: {str(cart_error)}")
+            # Не прерываем выполнение, это некритичная ошибка
+        
+        response_data = {
+            'message': 'Заказ успешно создан',
+            'order_id': cart.id,
+            'order_number': cart.order_number,
+            'total_price': float(cart.total_price)
+        }
+        print("=== Заказ успешно создан ===")
+        return Response(response_data, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        print(f"=== ОШИБКА: {str(e)} ===")
+        import traceback
+        print(traceback.format_exc())
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def user_orders(request):
-    """Получение всех заказов пользователя"""
-    # Используем related_name="orders" из модели Order для доступа к заказам пользователя
-    user_orders = request.user.orders.all().order_by('-created_at')
-    
-    # Группируем заказы по статусу
-    pending_orders = user_orders.filter(status='pending')
-    completed_orders = user_orders.filter(status__in=['delivered', 'shipped'])
-    canceled_orders = user_orders.filter(status='canceled')
-    
-    # Вычисляем общую сумму всех заказов
-    total_spent = user_orders.exclude(status='canceled').aggregate(Sum('total_price'))['total_price__sum'] or 0
-    
-    # Сериализуем каждую группу заказов
-    pending_serializer = OrderSerializer(pending_orders, many=True, context={'request': request})
-    completed_serializer = OrderSerializer(completed_orders, many=True, context={'request': request})
-    canceled_serializer = OrderSerializer(canceled_orders, many=True, context={'request': request})
-    
-    return Response({
-        'pending_orders': pending_serializer.data,
-        'completed_orders': completed_serializer.data,
-        'canceled_orders': canceled_serializer.data,
-        'total_spent': float(total_spent)
-    })
+    """Получение всех заказов пользователя с полной информацией"""
+    try:
+        # Получаем все заказы пользователя, кроме корзины
+        user_orders = Order.objects.filter(
+            user=request.user
+        ).exclude(
+            status='pending'
+        ).order_by('-created_at')
+        
+        # Группируем заказы по статусу
+        pending_orders = user_orders.filter(status__in=['assembling'])
+        completed_orders = user_orders.filter(status__in=['delivered', 'shipped'])
+        canceled_orders = user_orders.filter(status='canceled')
+        
+        # Вычисляем общую сумму всех заказов
+        total_spent = user_orders.exclude(status='canceled').aggregate(Sum('total_price'))['total_price__sum'] or 0
+        
+        # Подготавливаем детальную информацию о заказах
+        orders_data = []
+        for order in user_orders:
+            order_items = []
+            for item in order.items.all().select_related('product'):
+                order_items.append({
+                    'id': item.id,
+                    'name': item.product.name,
+                    'price': float(item.product.price),
+                    'quantity': item.quantity,
+                    'image': item.product.image.url if item.product.image else None,
+                    'product_id': item.product.id
+                })
+            
+            orders_data.append({
+                'id': order.id,
+                'number': order.order_number,
+                'date': order.created_at,
+                'status': order.status,
+                'total': float(order.total_price),
+                'items': order_items
+            })
+        
+        return Response({
+            'orders': orders_data,
+            'pending_orders': OrderSerializer(pending_orders, many=True).data,
+            'completed_orders': OrderSerializer(completed_orders, many=True).data,
+            'canceled_orders': OrderSerializer(canceled_orders, many=True).data,
+            'total_spent': float(total_spent)
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
