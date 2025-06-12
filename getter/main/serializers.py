@@ -63,9 +63,9 @@ class OrderItemSerializer(serializers.ModelSerializer):
         fields = ['id', 'order', 'product', 'quantity', 'price']
 
     def get_price(self, obj):
-        """Вычисляет итоговую цену за позицию заказа"""
+        """Вычисляет итоговую цену за позицию заказа с учетом скидки"""
         if obj.product:
-            return float(obj.product.price * obj.quantity)
+            return float(obj.product.get_discounted_price() * obj.quantity)
         return 0.0
 
 class OrderSerializer(serializers.ModelSerializer):
