@@ -5,7 +5,7 @@ from .views import (
     add_to_wishlist, remove_from_wishlist, check_wishlist, 
     get_cart, add_to_cart, remove_from_cart, ProductDetailView, 
     ReviewListCreateView, get_favorites, user_orders, check_user_purchased_product,
-    popular_wishlist_products, user_activity, advanced_product_search,
+    popular_wishlist_products, user_activity, FilteredProductListView,
     new_products, popular_products, recent_reviews, create_order
 )
 
@@ -32,6 +32,6 @@ urlpatterns = [
     path('user/<int:user_id>/activity/', user_activity, name='user-activity'),
     path('api/user-activity/<int:user_id>/', user_activity, name='user_activity'),
     path('api/user-activity/', user_activity, name='user_activity'),
-    path('products/search/advanced/', advanced_product_search, name='advanced-product-search'),
+    path('products/search/advanced/', FilteredProductListView.as_view(), name='advanced-product-search'),
     path('recent-reviews/', recent_reviews, name='recent_reviews'),
 ]

@@ -1,15 +1,18 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
-from django.db import models
-from django.db.models import Q, Avg, Count, Sum
-from .models import Category, Product, Wishlist, Order, OrderItem, Review
-from .serializers import CategorySerializer, ProductSerializer, OrderSerializer, OrderItemSerializer, ReviewSerializer, WishlistSerializer
+from django.shortcuts import render, redirect, get_object_or_404
+from django.db.models import Sum, Count, Avg, Q
 from django.utils import timezone
+from rest_framework import generics, status, permissions
+from rest_framework.views import APIView
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter, OrderingFilter
 import random
 from decimal import Decimal
+from .models import Category, Product, Order, OrderItem, Review, Wishlist
+from .serializers import CategorySerializer, ProductSerializer, OrderSerializer, ReviewSerializer, OrderItemSerializer, WishlistSerializer
+from .filters import ProductFilter
 
 class CategoryListView(APIView):
     permission_classes = [AllowAny]
@@ -48,34 +51,46 @@ class CategoryListView(APIView):
         except Category.DoesNotExist:
             return Response({'error': 'Категория не найдена'}, status=status.HTTP_404_NOT_FOUND)
 
-class ProductListView(APIView):
+class ProductListView(generics.ListCreateAPIView):
+    """
+    Список товаров с фильтрацией и сортировкой
+    """
+    serializer_class = ProductSerializer
     permission_classes = [AllowAny]
-
-    def get(self, request):
-        category_id = request.query_params.get('category')
-        if category_id:
-            products = Product.objects.filter(category_id=category_id).select_related('category')
-        else:
-            products = Product.objects.all().select_related('category')
-
-        # Аннотируем средний рейтинг
-        products = products.annotate(average_rating=Avg('reviews__rating'))
-
-        serializer = ProductSerializer(products, many=True, context={'request': request})
-        return Response(serializer.data)
-
-    def post(self, request):
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_class = ProductFilter
+    search_fields = ['name', 'description', 'sku', 'category__name']
+    ordering_fields = ['name', 'price', 'creation_date', 'discount']
+    ordering = ['-creation_date']  # Сортировка по умолчанию
+    
+    def get_queryset(self):
+        """
+        Возвращает queryset с аннотированным средним рейтингом.
+        """
+        return Product.objects.all().select_related('category').annotate(
+            average_rating=Avg('reviews__rating')
+        )
+    
+    def create(self, request, *args, **kwargs):
+        """
+        Создание нового товара (только для администраторов)
+        """
         if not request.user.is_superuser:
-            return Response({'error': 'Только администратор может создавать товары'}, 
-                          status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {'error': 'Только администратор может создавать товары'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
         try:
-            serializer = ProductSerializer(data=request.data, context={'request': request})
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return super().create(request, *args, **kwargs)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get_serializer_context(self):
+        """
+        Дополнительный контекст для сериализатора
+        """
+        context = super().get_serializer_context()
+        return context
 
 class ProductDetailView(APIView):
     permission_classes = [AllowAny]
@@ -640,70 +655,66 @@ def user_activity(request, user_id=None):
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def advanced_product_search(request):
+class FilteredProductListView(generics.ListAPIView):
     """
-    Расширенный поиск и анализ товаров с поддержкой живого поиска
+    Расширенный поиск и анализ товаров с поддержкой фильтрации
     """
-    search_term = request.query_params.get('search', '').strip()
-    min_price = request.query_params.get('min_price')
-    max_price = request.query_params.get('max_price')
-    category = request.query_params.get('category')
-    
-    products = Product.objects.all()
-    
-    if search_term:
-        products = products.filter(
-            Q(name__icontains=search_term) |
-            Q(sku__contains=search_term) |
-            Q(category__name__icontains=search_term)
+    serializer_class = ProductSerializer
+    permission_classes = [AllowAny]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_class = ProductFilter
+    search_fields = ['name', 'description', 'sku', 'category__name']
+    ordering_fields = ['name', 'price', 'creation_date', 'discount']
+    ordering = ['-creation_date']  # Сортировка по умолчанию
+
+    def get_queryset(self):
+        """
+        Возвращает queryset с аннотированным средним рейтингом.
+        """
+        return Product.objects.all().select_related('category').annotate(
+            average_rating=Avg('reviews__rating')
         )
     
-    if min_price:
-        products = products.filter(price__gte=float(min_price))
-    
-    if max_price:
-        products = products.filter(price__lte=float(max_price))
-    
-    if category:
-        products = products.filter(category__name__icontains=category)
-
-    # Добавляем аннотации и оптимизируем запрос
-    products = products.select_related('category').annotate(
-        average_rating=Avg('reviews__rating')
-    )
-
-    # Используем values() для оптимизации, если запрос из выпадающего списка
-    if request.query_params.get('dropdown') == 'true':
-        products = products.values(
-            'id', 'name', 'price', 'image', 
-            'category__name', 'is_available'
-        )[:5]  # Ограничиваем результаты для выпадающего списка
+    def list(self, request, *args, **kwargs):
+        """
+        Переопределяем стандартный ответ для добавления дополнительных параметров
+        """
+        queryset = self.filter_queryset(self.get_queryset())
         
-        # Форматируем результаты
-        results = [{
-            'id': p['id'],
-            'name': p['name'],
-            'price': p['price'],
-            'image': p['image'],
-            'category': {'name': p['category__name']},
-            'is_available': p['is_available']
-        } for p in products]
-        
+        # Если запрос для выпадающего списка, форматируем результаты по-другому
+        if request.query_params.get('dropdown') == 'true':
+            limited_queryset = queryset[:5]  # Ограничиваем результаты
+            
+            # Форматируем результаты
+            results = [{
+                'id': p.id,
+                'name': p.name,
+                'price': float(p.price),
+                'image': p.image.url if p.image else None,
+                'category': {'name': p.category.name if p.category else ''},
+                'is_available': p.is_available
+            } for p in limited_queryset]
+            
+            return Response({
+                'products': results,
+                'total': queryset.count(),
+                'query': request.query_params.get('search', '')
+            })
+            
+        # Стандартная сериализация для страницы поиска
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            response = self.get_paginated_response(serializer.data)
+            response.data['query'] = request.query_params.get('search', '')
+            return response
+
+        serializer = self.get_serializer(queryset, many=True)
         return Response({
-            'products': results,
-            'total': products.count()
+            'products': serializer.data,
+            'total': queryset.count(),
+            'query': request.query_params.get('search', '')
         })
-
-    # Полная сериализация для страницы поиска
-    serializer = ProductSerializer(products, many=True, context={'request': request})
-    
-    return Response({
-        'products': serializer.data,
-        'total': products.count(),
-        'query': search_term
-    })
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
