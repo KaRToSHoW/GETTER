@@ -75,6 +75,14 @@ class Order(models.Model):
     created_at = models.DateTimeField(default=timezone.now, verbose_name="Создан")
     updated_at = models.DateTimeField(auto_now=True)
     order_number = models.CharField(max_length=20, unique=True, blank=True, null=True, verbose_name="Номер заказа")  
+    
+    # Поля информации о доставке
+    shipping_city = models.CharField(max_length=100, blank=True, null=True, verbose_name="Город")
+    shipping_street = models.CharField(max_length=200, blank=True, null=True, verbose_name="Улица")
+    shipping_house = models.CharField(max_length=50, blank=True, null=True, verbose_name="Дом")
+    shipping_apartment = models.CharField(max_length=50, blank=True, null=True, verbose_name="Квартира")
+    shipping_postal_code = models.CharField(max_length=20, blank=True, null=True, verbose_name="Почтовый индекс")
+    shipping_comment = models.TextField(blank=True, null=True, verbose_name="Комментарий к доставке")
 
     class Meta:
         ordering = ['-created_at']
@@ -127,6 +135,22 @@ class Order(models.Model):
                 self.save()
                 return True
         return False
+        
+    def get_shipping_address(self):
+        """Возвращает полный адрес доставки в виде строки"""
+        address_parts = []
+        if self.shipping_city:
+            address_parts.append(self.shipping_city)
+        if self.shipping_street:
+            address_parts.append(self.shipping_street)
+        if self.shipping_house:
+            address_parts.append(f"дом {self.shipping_house}")
+        if self.shipping_apartment:
+            address_parts.append(f"кв. {self.shipping_apartment}")
+        if self.shipping_postal_code:
+            address_parts.append(f"индекс: {self.shipping_postal_code}")
+            
+        return ", ".join(address_parts) if address_parts else "Адрес не указан"
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items", verbose_name="Заказ")

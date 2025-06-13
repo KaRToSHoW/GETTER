@@ -44,13 +44,13 @@
                     </div>
 
                     <div class="quantity-control">
-                        <button @click="decreaseQuantity(item)" class="quantity-button">
+                        <button @click="decrementQuantity(item)" class="quantity-button">
                             -
                             <span class="sr-only">Уменьшить количество</span>
                         </button>
-                        <input type="number" v-model.number="item.quantity" @change="updateQuantity(item)" min="1"
+                        <input type="number" v-model.number="item.quantity" @change="validateAndUpdateQuantity(item)" min="1"
                             class="quantity-input" />
-                        <button @click="increaseQuantity(item)" class="quantity-button">
+                        <button @click="incrementQuantity(item)" class="quantity-button">
                             +
                             <span class="sr-only">Увеличить количество</span>
                         </button>
@@ -67,7 +67,7 @@
                         <span class="heart-icon">❤️</span>
                         <span class="sr-only">{{ isInWishlist(item.product.id) ? 'Удалить из избранного' : 'Добавить в избранное' }}</span>
                     </button>
-                    <button @click="removeFromCart(item.id)" class="remove-button">
+                    <button @click="removeItem(item.id)" class="remove-button">
                         <span class="trash-icon">🗑️</span>
                         <span class="sr-only">Удалить из корзины</span>
                     </button>
@@ -393,15 +393,7 @@ const mergeLocalCartWithServer = async (localCart) => {
     }
 };
 
-const increaseQuantity = (item) => {
-    updateQuantity(item, 1);
-};
-
-const decreaseQuantity = (item) => {
-    if (item.quantity > 1) {
-        updateQuantity(item, -1);
-    }
-};
+// Функции уже не используются, заменены на incrementQuantity и decrementQuantity
 
 const updateQuantity = async (item, change) => {
     try {
@@ -410,7 +402,7 @@ const updateQuantity = async (item, change) => {
         let newQuantity = change !== undefined ? item.quantity + change : item.quantity;
 
         if (newQuantity <= 0) {
-            await removeFromCart(item.id);
+            await removeItem(item.id);
             return;
         }
 
@@ -450,9 +442,12 @@ const updateQuantity = async (item, change) => {
 };
 
 const canEditCartItem = (item) => {
-    if (!currentUser.value) return false;
+    if (!currentUser.value) return true;
     
     if (currentUser.value.is_superuser) return true;
+    
+    // Если у товара нет user_id, то считаем его доступным
+    if (!item.user_id) return true;
     
     return item.user_id === currentUser.value.id;
 };
@@ -504,64 +499,7 @@ const canDeleteFromCart = (item) => {
     return true;
 };
 
-const removeFromCart = async (itemId) => {
-    try {
-        console.log('Начало удаления товара из корзины, ID:', itemId);
-        const token = localStorage.getItem('token');
-        const item = cart.value.items.find(item => item.id === itemId);
-        
-        if (!item) {
-            console.error('Товар не найден в корзине, ID:', itemId);
-            toast.value.showToast('Товар не найден в корзине', 'error');
-            return;
-        }
-        
-        console.log('Найден товар для удаления:', item.product.name);
-        
-        // В соответствии с обновленной логикой, все товары в корзине пользователя
-        // должны быть доступны для удаления
-        
-        // Принудительно удалим товар из локального массива для мгновенного отклика UI
-        cart.value.items = cart.value.items.filter(i => i.id !== itemId);
-        
-        // Удаляем из выбранных товаров
-        selectedItems.value = selectedItems.value.filter(id => id !== itemId);
-        
-        if (token) {
-            console.log('Авторизованный пользователь, отправка запроса на удаление с сервера, ID:', itemId);
-            try {
-                const response = await axios.delete(`${$apiBaseUrl}/main/cart/remove/${itemId}/`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                console.log('Ответ сервера на удаление:', response.data);
-                
-                // Перезагрузим данные корзины в фоне, чтобы синхронизировать с сервером
-                await loadCartData();
-            } catch (serverError) {
-                console.error('Ошибка при удалении с сервера:', serverError);
-                toast.value.showToast('Товар удален локально, но произошла ошибка синхронизации с сервером', 'warning');
-            }
-        } else {
-            console.log('Неавторизованный пользователь, удаление из локального хранилища');
-            // Сохраняем изменения в localStorage
-            saveLocalCart();
-        }
-        
-        toast.value.showToast(`Товар "${item.product.name}" удален из корзины`, 'success');
-        console.log('Товар успешно удален из корзины');
-    } catch (error) {
-        console.error('Ошибка удаления из корзины:', error);
-        console.error('Детали ошибки:', error.response ? error.response.data : error.message);
-        toast.value.showToast('Ошибка при удалении товара из корзины', 'error');
-        
-        // Пытаемся перезагрузить корзину в случае критической ошибки
-        try {
-            await loadCartData();
-        } catch (loadError) {
-            console.error('Ошибка при перезагрузке корзины:', loadError);
-        }
-    }
-};
+
 
 const isInWishlist = computed(() => (productId) => {
     return wishlist.value.includes(productId);
@@ -627,8 +565,6 @@ const getSubtotal = computed(() => {
     });
     return total;
 });
-
-
 
 const getTotal = computed(() => {
     return getSubtotal.value - promoDiscount.value;
@@ -718,53 +654,11 @@ const checkout = async () => {
             return;
         }
 
-        // Если выбраны не все товары, удаляем невыбранные из корзины
-        const nonSelectedItems = cart.value.items.filter(item => !selectedItems.value.includes(item.id));
-        if (nonSelectedItems.length > 0) {
-            for (const item of nonSelectedItems) {
-                try {
-                    await removeFromCart(item.id);
-                } catch (error) {
-                    console.error(`Ошибка при удалении товара ${item.id}:`, error);
-                }
-            }
-        }
-
-        toast.value.showToast('Оформление заказа...', 'info');
-        
-        try {
-            // Вызываем API для создания заказа
-            const response = await axios.post(`${$apiBaseUrl}/main/orders/create/`, {}, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            
-            console.log('Заказ успешно создан:', response.data);
-            
-            // Очищаем выбранные товары
-            selectedItems.value = [];
-            
-            // Сбрасываем промокод
-            promoCode.value = '';
-            promoDiscount.value = 0;
-            promoError.value = '';
-            
-            // Перезагружаем корзину
-            await loadCartData();
-            
-            toast.value.showToast(`Заказ успешно оформлен! Номер заказа: ${response.data.order_number}`, 'success');
-            
-            // Перенаправляем на страницу профиля с историей заказов
-            router.push('/profile?tab=orders');
-            
-        } catch (error) {
-            console.error('Ошибка создания заказа:', error);
-            const errorMessage = error.response?.data?.error || 'Ошибка при оформлении заказа';
-            toast.value.showToast(errorMessage, 'error');
-        }
+        // Перенаправляем пользователя на страницу оформления заказа
+        router.push('/checkout');
     } catch (error) {
-        console.error('Ошибка оформления заказа:', error);
-        console.error('Детали ошибки:', error.response ? error.response.data : error.message);
-        toast.value.showToast('Ошибка при оформлении заказа', 'error');
+        console.error('Ошибка перехода к оформлению заказа:', error);
+        toast.value.showToast('Ошибка при переходе к оформлению заказа', 'error');
     }
 };
 
@@ -880,6 +774,77 @@ const saveLocalCart = () => {
         }
     } catch (error) {
         console.error('Критическая ошибка сохранения локальной корзины:', error);
+    }
+};
+
+const validateAndUpdateQuantity = async (item) => {
+    try {
+        // Получаем актуальную информацию о товаре для проверки доступного количества
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`${$apiBaseUrl}/main/products/${item.product.id}/`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const availableStock = response.data.stock;
+        
+        // Проверяем, не превышает ли запрашиваемое количество доступное на складе
+        if (item.quantity > availableStock) {
+            // Устанавливаем максимально доступное количество
+            item.quantity = availableStock;
+            toast.value?.showToast(`Доступно только ${availableStock} шт. этого товара`, 'warning');
+        }
+        
+        // Обновляем количество в корзине
+        await updateQuantity(item);
+    } catch (error) {
+        console.error('Ошибка при валидации количества:', error);
+        toast.value?.showToast('Ошибка при обновлении количества', 'error');
+    }
+};
+
+const incrementQuantity = async (item) => {
+    try {
+        // Получаем актуальную информацию о товаре
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`${$apiBaseUrl}/main/products/${item.product.id}/`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const availableStock = response.data.stock;
+        
+        // Проверяем, не превышает ли запрашиваемое количество доступное на складе
+        if (item.quantity >= availableStock) {
+            toast.value?.showToast(`Доступно только ${availableStock} шт. этого товара`, 'warning');
+            return;
+        }
+        
+        // Увеличиваем количество и обновляем корзину
+        item.quantity++;
+        await updateQuantity(item);
+    } catch (error) {
+        console.error('Ошибка при увеличении количества:', error);
+        toast.value?.showToast('Ошибка при обновлении количества', 'error');
+    }
+};
+
+const decrementQuantity = async (item) => {
+    if (item.quantity > 1) {
+        item.quantity--;
+        await updateQuantity(item);
+    }
+};
+
+const removeItem = async (itemId) => {
+    try {
+        const token = localStorage.getItem('token');
+        await axios.delete(`${$apiBaseUrl}/main/cart/remove/${itemId}/`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        toast.value?.showToast('Товар удален из корзины', 'success');
+        await loadCartData();
+    } catch (err) {
+        console.error('Ошибка при удалении товара из корзины:', err);
+        toast.value?.showToast('Не удалось удалить товар из корзины', 'error');
     }
 };
 

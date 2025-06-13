@@ -4,7 +4,7 @@ from .views import (
     CategoryListView, ProductListView, OrderDetailView, 
     add_to_wishlist, remove_from_wishlist, check_wishlist, 
     get_cart, add_to_cart, remove_from_cart, ProductDetailView, 
-    ReviewListCreateView, get_favorites, user_orders, 
+    ReviewListCreateView, get_favorites, user_orders, check_user_purchased_product,
     popular_wishlist_products, user_activity, advanced_product_search,
     new_products, popular_products, recent_reviews, create_order
 )
@@ -13,6 +13,7 @@ urlpatterns = [
     path('categories/', CategoryListView.as_view(), name='category-list'),
     path('products/', ProductListView.as_view(), name='product-list'),
     path('products/<int:pk>/', ProductDetailView.as_view(), name='product-detail'),
+    path('products/<int:product_id>/check-purchased/', check_user_purchased_product, name='check-purchased'),
     path('products/<int:product_id>/reviews/', ReviewListCreateView.as_view(), name='review-list-create'),
     path('products/<int:product_id>/reviews/<int:review_id>/', ReviewListCreateView.as_view(), name='review-detail'),
     path('products/popular-wishlist/', popular_wishlist_products, name='popular-wishlist-products'),

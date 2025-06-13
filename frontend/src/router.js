@@ -9,6 +9,7 @@ import ProductPage from './components/ProductPage.vue'
 import FavoritesPage from './components/FavoritesPage.vue'
 import SearchResults from './components/SearchResults.vue'
 import CatalogPage from './components/CatalogPage.vue'
+import CheckoutPage from './components/CheckoutPage.vue'
 
 const routes = [
     { path: '/login', component: LoginForm },
@@ -21,6 +22,8 @@ const routes = [
     { path: '/favorites', name: 'favorites', component: FavoritesPage },
     { path: '/search', name: 'search', component: SearchResults },
     { path: '/catalog', name: 'catalog', component: CatalogPage },
+    { path: '/checkout', name: 'checkout', component: CheckoutPage },
+    { path: '/order-success/:orderId', name: 'order-success', component: () => import('./components/OrderSuccessPage.vue'), props: true },
     { path: '/', redirect: '/home' },
 ]
 

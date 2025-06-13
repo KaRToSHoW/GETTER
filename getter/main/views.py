@@ -419,6 +419,18 @@ def create_order(request):
         print("Обновляем статус заказа на 'в сборке'")
         cart.status = 'assembling'
         
+        # Получение и сохранение данных доставки из запроса
+        print("Получение данных доставки из запроса:")
+        shipping_data = request.data.get('shipping', {})
+        cart.shipping_city = shipping_data.get('city')
+        cart.shipping_street = shipping_data.get('street')
+        cart.shipping_house = shipping_data.get('house')
+        cart.shipping_apartment = shipping_data.get('apartment')
+        cart.shipping_postal_code = shipping_data.get('postal_code')
+        cart.shipping_comment = shipping_data.get('comment')
+        
+        print(f"Адрес доставки: {cart.get_shipping_address()}")
+        
         # Генерируем номер заказа, если его нет
         if not cart.order_number:
             # Генерируем уникальный номер заказа
@@ -478,7 +490,8 @@ def create_order(request):
             'message': 'Заказ успешно создан',
             'order_id': cart.id,
             'order_number': cart.order_number,
-            'total_price': float(cart.total_price)
+            'total_price': float(cart.total_price),
+            'shipping_address': cart.get_shipping_address()
         }
         print("=== Заказ успешно создан ===")
         return Response(response_data, status=status.HTTP_201_CREATED)
@@ -761,3 +774,46 @@ def recent_reviews(request):
         response_data.append(review_data)
     
     return Response(response_data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def check_user_purchased_product(request, product_id):
+    """Проверяет, покупал ли пользователь данный товар"""
+    try:
+        # Если пользователь администратор, он может оставлять отзывы на любой товар
+        if request.user.is_superuser:
+            return Response({'purchased': True})
+            
+        # Более точная проверка через модель OrderItem
+        has_purchased = OrderItem.objects.filter(
+            order__user=request.user,
+            product_id=product_id
+        ).exists()
+        
+        # Дополнительная проверка для отладки
+        if not has_purchased:
+            # Проверим все заказы пользователя
+            user_orders = Order.objects.filter(user=request.user).values_list('id', flat=True)
+            # Проверим наличие данного товара в позициях заказа
+            order_items = OrderItem.objects.filter(
+                order_id__in=user_orders,
+                product_id=product_id
+            )
+            
+            if order_items.exists():
+                # Если товар найден в заказах, разрешим оставить отзыв
+                has_purchased = True
+        
+        # Отправим отладочную информацию
+        return Response({
+            'purchased': has_purchased,
+            'user_id': request.user.id,
+            'product_id': product_id,
+            'debug': 'Заказ найден' if has_purchased else 'Заказ не найден'
+        })
+    except Exception as e:
+        return Response({
+            'error': str(e),
+            'user_id': request.user.id,
+            'product_id': product_id
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

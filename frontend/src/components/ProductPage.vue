@@ -100,16 +100,37 @@
 
             <div class="add-review">
                 <h4>Оставить отзыв</h4>
+                
+                <!-- Предупреждение для пользователей, которые не покупали товар -->
+                <div v-if="!hasUserPurchasedProduct" class="review-warning">
+                    <i class="warning-icon">⚠️</i>
+                    <p>Вы можете оставить отзыв только на товар, который приобрели.</p>
+                </div>
+                
                 <div class="rating-input">
-                    <span v-for="i in 5" :key="i" :class="['star', i <= newRating ? 'filled' : '']"
-                        @click="newRating = i">★</span>
+                    <span v-for="i in 5" :key="i" 
+                        :class="['star', i <= newRating ? 'filled' : '', !hasUserPurchasedProduct ? 'disabled' : '']"
+                        @click="hasUserPurchasedProduct && (newRating = i)">★</span>
                 </div>
-                <textarea v-model="newComment" placeholder="Ваш отзыв..." class="review-textarea"></textarea>
+                <textarea v-model="newComment" 
+                    placeholder="Ваш отзыв..." 
+                    class="review-textarea"
+                    :disabled="!hasUserPurchasedProduct"></textarea>
                 <div class="review-fields">
-                    <input v-model="reviewPros" placeholder="Плюсы" class="review-input" />
-                    <input v-model="reviewCons" placeholder="Минусы" class="review-input" />
+                    <input v-model="reviewPros" 
+                        placeholder="Плюсы" 
+                        class="review-input"
+                        :disabled="!hasUserPurchasedProduct" />
+                    <input v-model="reviewCons" 
+                        placeholder="Минусы" 
+                        class="review-input"
+                        :disabled="!hasUserPurchasedProduct" />
                 </div>
-                <button @click="submitReview" class="submit-review-button">Отправить</button>
+                <button @click="submitReview" 
+                    class="submit-review-button"
+                    :disabled="!hasUserPurchasedProduct">
+                    Отправить
+                </button>
             </div>
 
             <div class="reviews-filters">
@@ -297,13 +318,17 @@ const currentUser = ref(null);
 const editingReview = ref(null);
 const editingProduct = ref(null);
 const categories = ref([]);
+const hasUserPurchasedProduct = ref(false);
 
 onMounted(async () => {
+    checkAuthStatus();
     await loadCurrentUser();
     await loadProductData();
     if (currentUser.value && currentUser.value.is_superuser) {
         await loadCategories();
     }
+    await checkUserPurchasedProduct();
+    window.scrollTo(0, 0);
 });
 
 const loadProductData = async () => {
@@ -568,32 +593,60 @@ const formatDate = (date) => {
     });
 };
 
+// Проверка статуса аутентификации
+const isAuthenticated = ref(false);
+
+const checkAuthStatus = () => {
+  const token = localStorage.getItem('token');
+  isAuthenticated.value = !!token;
+};
+
+// onMounted вызывается в другом месте, не дублируем
+
 // Обновляем функцию отправки отзыва
 const submitReview = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-        toast.value.showToast('Пожалуйста, войдите в систему для оставления отзыва.', 'warning');
+    if (!isAuthenticated.value) {
+        toast.value?.showToast('Необходимо войти в аккаунт, чтобы оставить отзыв', 'error');
         return;
     }
-
+    
+    if (!hasUserPurchasedProduct.value) {
+        toast.value?.showToast('Вы можете оставить отзыв только на приобретенный товар', 'error');
+        return;
+    }
+    
+    if (!newRating.value) {
+        toast.value?.showToast('Пожалуйста, выберите рейтинг', 'error');
+        return;
+    }
+    
     try {
-        const response = await axios.post(`${API_BASE_URL}/main/products/${route.params.id}/reviews/`, {
+        const token = localStorage.getItem('token');
+        const reviewData = {
+            product_id: route.params.id,
             rating: newRating.value,
             comment: newComment.value,
             pros: reviewPros.value,
             cons: reviewCons.value
-        }, {
+        };
+        
+        await axios.post(`${API_BASE_URL}/main/products/${route.params.id}/reviews/`, reviewData, {
             headers: { Authorization: `Bearer ${token}` }
         });
-        reviews.value = [...reviews.value, response.data];
-        newRating.value = 5;
+        
+        toast.value?.showToast('Ваш отзыв успешно добавлен!', 'success');
+        
+        // Очистить форму
+        newRating.value = 0;
         newComment.value = '';
         reviewPros.value = '';
         reviewCons.value = '';
-        toast.value.showToast('Отзыв успешно добавлен!', 'success');
-    } catch (error) {
-        console.error('Ошибка отправки отзыва:', error.response ? error.response.data : error.message);
-        toast.value.showToast('Ошибка при отправке отзыва: ' + (error.response ? JSON.stringify(error.response.data) : error.message), 'error');
+        
+        // Загрузить обновленные отзывы
+        loadProductData();
+    } catch (err) {
+        console.error('Ошибка при отправке отзыва:', err);
+        toast.value?.showToast('Ошибка при отправке отзыва: ' + (err.response?.data?.detail || err.message), 'error');
     }
 };
 
@@ -861,6 +914,38 @@ const handleDocumentUpload = async (event) => {
     } catch (error) {
         console.error('Ошибка загрузки документации:', error);
         toast.value?.showToast('Ошибка при загрузке документации', 'error');
+    }
+};
+
+// Проверка, покупал ли пользователь данный товар
+const checkUserPurchasedProduct = async () => {
+    try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        
+        const response = await axios.get(`${API_BASE_URL}/main/products/${route.params.id}/check-purchased/`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        console.log('Результат проверки покупок:', response.data);
+        
+        // Проверяем ответ от сервера
+        if (response.data && response.data.purchased !== undefined) {
+            hasUserPurchasedProduct.value = response.data.purchased;
+        } else if (currentUser.value) {
+            // Если пользователь авторизован, временно разрешаем оставлять отзывы
+            // для отладки проблемы
+            console.log('Авторизованный пользователь, разрешаем оставить отзыв для отладки');
+            hasUserPurchasedProduct.value = true;
+        }
+    } catch (err) {
+        console.error('Ошибка при проверке покупки товара:', err);
+        
+        // В случае ошибки, проверяем, является ли пользователь администратором
+        if (currentUser.value && currentUser.value.is_superuser) {
+            console.log('Администратору разрешено оставлять отзывы на любые товары');
+            hasUserPurchasedProduct.value = true;
+        }
     }
 };
 </script>
@@ -1710,7 +1795,7 @@ const handleDocumentUpload = async (event) => {
 
 @keyframes slideUp {
     from {
-        transform: translateY(30px);
+        transform: translateY(50px);
         opacity: 0;
     }
     to {
@@ -2070,5 +2155,36 @@ const handleDocumentUpload = async (event) => {
     .rating-summary {
         width: 100%;
     }
+}
+
+.submit-review-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #cccccc;
+}
+
+.star.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.review-warning {
+    background-color: #fff8e6;
+    border: 1px solid #ffd77a;
+    border-radius: 8px;
+    padding: 10px 15px;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+}
+
+.warning-icon {
+    font-size: 18px;
+    margin-right: 10px;
+}
+
+.review-textarea:disabled, .review-input:disabled {
+    background-color: #f1f1f1;
+    cursor: not-allowed;
 }
 </style>
