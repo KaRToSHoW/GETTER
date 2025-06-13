@@ -64,11 +64,20 @@ class OrderAdmin(admin.ModelAdmin):
     list_filter = ('status',)
     date_hierarchy = 'created_at'
     search_fields = ('user__username', 'order_number')  # Ищем по 'order_number', а не по 'id'
-    readonly_fields = ('get_total_price',)
+    readonly_fields = ('get_total_price', 'get_shipping_address')
     inlines = [OrderItemInline]
     autocomplete_fields = ['user']
     ordering = ['-created_at']
     actions = ['mark_as_shipped', 'mark_as_delivered', 'mark_as_canceled', 'send_invoice', 'generate_pdf']
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('order_number', 'user', 'status', 'get_total_price', 'created_at', 'updated_at')
+        }),
+        ('Информация о доставке', {
+            'fields': ('shipping_city', 'shipping_street', 'shipping_house', 'shipping_apartment', 
+                      'shipping_postal_code', 'shipping_comment', 'get_shipping_address')
+        }),
+    )
 
     @admin.display(description='Общая цена')
     def get_total_price(self, obj):
@@ -81,6 +90,10 @@ class OrderAdmin(admin.ModelAdmin):
     @admin.display(description='Количество позиций')
     def get_order_items_count(self, obj):
         return obj.items.count()
+        
+    @admin.display(description='Полный адрес доставки')
+    def get_shipping_address(self, obj):
+        return obj.get_shipping_address()
 
     def mark_as_shipped(self, request, queryset):
         queryset.update(status='shipped')
@@ -118,7 +131,14 @@ class OrderAdmin(admin.ModelAdmin):
             p.drawString(50, y, f"Статус: {order.get_status_display()}")
             y -= 20
             p.drawString(50, y, f"Дата создания: {order.created_at.strftime('%d.%m.%Y %H:%M')}")
-            y -= 40
+            y -= 20
+            
+            # Shipping address
+            if order.shipping_city or order.shipping_street:
+                p.drawString(50, y, f"Адрес доставки: {order.get_shipping_address()}")
+                y -= 40
+            else:
+                y -= 20
             
             # Items header
             p.setFont("DejaVuSerif", 12)

@@ -182,11 +182,11 @@
                                         <div class="order-info">
                                             <div class="order-number">
                                                 <span class="order-label">Заказ:</span>
-                                                <span class="order-value">{{ order.number }}</span>
+                                                <span class="order-value">{{ order.order_number || order.number }}</span>
                                             </div>
                                             <div class="order-date">
                                                 <span class="order-label">Дата:</span>
-                                                <span class="order-value">{{ formatOrderDate(order.date) }}</span>
+                                                <span class="order-value">{{ formatOrderDate(order.created_at || order.date) }}</span>
                                             </div>
                                         </div>
                                         <div class="order-status" :class="`status-${mapStatusClass(order.status)}`">
@@ -196,21 +196,30 @@
                                     
                                     <div class="order-products">
                                         <div v-for="item in order.items" :key="item.id" class="order-product">
-                                            <div class="product-image" v-if="item.image">
-                                                <img :src="`${apiBaseUrl}${item.image}`" :alt="item.name" />
+                                            <div class="product-image" v-if="item.product && item.product.image">
+                                                <img :src="`${apiBaseUrl}${item.product.image}`" :alt="item.product?.name" />
                                             </div>
                                             <div class="product-info">
-                                                <div class="product-name">{{ item.name }}</div>
+                                                <div class="product-name">{{ item.product?.name || item.name }}</div>
                                                 <div class="product-quantity">{{ item.quantity }} шт.</div>
                                             </div>
-                                            <div class="product-price">{{ formatPrice(item.price * item.quantity) }}</div>
+                                            <div class="product-price">{{ formatPrice(calculateItemPrice(item)) }}</div>
                                         </div>
+                                    </div>
+                                    
+                                    <!-- Информация о доставке -->
+                                    <div class="order-shipping" v-if="hasShippingInfo(order)">
+                                        <h3 class="shipping-title">Адрес доставки:</h3>
+                                        <p class="shipping-address">{{ getShippingAddress(order) }}</p>
+                                        <p class="shipping-comment" v-if="order.shipping_comment">
+                                            Комментарий: {{ order.shipping_comment }}
+                                        </p>
                                     </div>
                                     
                                     <div class="order-footer">
                                         <div class="order-total">
                                             <span class="total-label">Итого:</span>
-                                            <span class="total-value">{{ formatPrice(order.total) }}</span>
+                                            <span class="total-value">{{ formatPrice(order.total_price || order.total) }}</span>
                                         </div>
                                         <button class="order-details-btn" @click="viewOrderDetails(order.id)">Подробнее</button>
                                     </div>
@@ -607,7 +616,10 @@ const setActiveTab = (tab) => {
 
 // Переход на просмотр деталей заказа
 const viewOrderDetails = (orderId) => {
-    router.push(`/orders/${orderId}`);
+    router.push({
+        name: 'order-success',
+        params: { orderId: orderId }
+    });
 };
 
 // Навигация
@@ -679,6 +691,53 @@ const removeImage = async () => {
     } catch (error) {
         console.error('Ошибка удаления изображения:', error);
         alert('Ошибка при удалении изображения');
+    }
+};
+
+// Дополнительные функции для обработки данных заказа
+const hasShippingInfo = (order) => {
+    return order.shipping_city || order.shipping_street || order.shipping_address;
+};
+
+const getShippingAddress = (order) => {
+    // Если есть готовый адрес, используем его
+    if (order.shipping_address) {
+        return order.shipping_address;
+    }
+    
+    // Иначе собираем адрес из отдельных полей
+    const addressParts = [];
+    
+    if (order.shipping_postal_code) {
+        addressParts.push(`индекс: ${order.shipping_postal_code}`);
+    }
+    
+    if (order.shipping_city) {
+        addressParts.push(`г. ${order.shipping_city}`);
+    }
+    
+    if (order.shipping_street) {
+        addressParts.push(`ул. ${order.shipping_street}`);
+    }
+    
+    if (order.shipping_house) {
+        addressParts.push(`д. ${order.shipping_house}`);
+    }
+    
+    if (order.shipping_apartment) {
+        addressParts.push(`кв. ${order.shipping_apartment}`);
+    }
+    
+    return addressParts.join(', ');
+};
+
+const calculateItemPrice = (item) => {
+    if (item.product && item.product.discounted_price) {
+        return item.product.discounted_price * item.quantity;
+    } else if (item.discounted_price) {
+        return item.discounted_price * item.quantity;
+    } else {
+        return item.price * item.quantity;
     }
 };
 </script>
@@ -1503,5 +1562,30 @@ const removeImage = async () => {
     .favorites-list {
         grid-template-columns: 1fr;
     }
+}
+
+/* Стили для информации о доставке */
+.order-shipping {
+    padding: 15px;
+    background-color: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+}
+
+.shipping-title {
+    font-size: 16px;
+    color: #4a5568;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.shipping-address {
+    color: #2d3748;
+    margin-bottom: 5px;
+}
+
+.shipping-comment {
+    font-style: italic;
+    color: #718096;
+    font-size: 14px;
 }
 </style>

@@ -73,13 +73,20 @@ class OrderSerializer(serializers.ModelSerializer):
     user = serializers.StringRelatedField(read_only=True)
     url = serializers.SerializerMethodField()
     total_orders_sum = serializers.FloatField(read_only=True, required=False)  # Сумма всех заказов пользователя
+    shipping_address = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Order
-        fields = ['id', 'user', 'status', 'total_price', 'created_at', 'updated_at', 'order_number', 'items', 'url', 'total_orders_sum']
+        fields = ['id', 'user', 'status', 'total_price', 'created_at', 'updated_at', 'order_number', 
+                  'items', 'url', 'total_orders_sum', 'shipping_city', 'shipping_street', 
+                  'shipping_house', 'shipping_apartment', 'shipping_postal_code', 
+                  'shipping_comment', 'shipping_address']
 
     def get_url(self, obj):
         return obj.get_absolute_url()
+        
+    def get_shipping_address(self, obj):
+        return obj.get_shipping_address()
 
 class ReviewSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
