@@ -82,6 +82,14 @@
                     <p class="auth-redirect">
                         Нет аккаунта? <router-link to="/register">Зарегистрируйтесь</router-link>
                     </p>
+                    
+                    <!-- Кнопка для тестирования Hawk -->
+                    <div v-if="isDevelopment" class="hawk-test-container">
+                        <button @click.prevent="sendTestErrorToHawk" class="hawk-test-button">
+                            Тест Hawk Error
+                        </button>
+                        <small>Только для разработки</small>
+                    </div>
                 </div>
             </div>
         </div>
@@ -99,6 +107,8 @@ const password = ref('');
 const isAuthenticated = inject('isAuthenticated');
 const router = useRouter();
 const toast = ref(null);
+const $hawk = inject('$hawk', null); // Получаем экземпляр Hawk из глобальных свойств
+const isDevelopment = ref(process.env.NODE_ENV === 'development'); // Определяем, находимся ли в режиме разработки
 
 const handleLogin = async () => {
     try {
@@ -131,6 +141,16 @@ const handleLogin = async () => {
     } catch (error) {
         console.error('Ошибка входа:', error);
         
+        // Отправляем информацию об ошибке в Hawk
+        if ($hawk) {
+            $hawk.send(error, {
+                username: username.value,
+                errorContext: 'Ошибка авторизации',
+                location: 'LoginForm.vue',
+                date: new Date().toISOString()
+            });
+        }
+        
         let errorMessage = 'Ошибка входа: ';
         
         // Обрабатываем разные типы ошибок
@@ -152,6 +172,44 @@ const handleLogin = async () => {
         }
         
         toast.value.showToast(errorMessage, 'error');
+    }
+};
+
+// Функция для тестирования отправки ошибок в Hawk
+const sendTestErrorToHawk = () => {
+    if ($hawk) {
+        // Создаем информативную тестовую ошибку
+        const testError = new Error('Тестовая ошибка из LoginForm');
+        testError.name = 'HawkTestError';
+        
+        const testContext = {
+            type: 'manual_test',
+            message: 'Тестовая ошибка для проверки работы Hawk',
+            component: 'LoginForm',
+            browser: navigator.userAgent,
+            timestamp: new Date().toISOString(),
+            custom_data: {
+                resolution: `${window.innerWidth}x${window.innerHeight}`,
+                platform: navigator.platform
+            }
+        };
+        
+        // Отправка события в Hawk
+        $hawk.send(testError, testContext);
+        
+        // Подтверждение для пользователя
+        console.log('[Hawk Test] ✅ Тестовая ошибка отправлена', testContext);
+        toast.value.showToast('Ошибка успешно отправлена в Hawk', 'success');
+        
+        // Показываем сообщение о предупреждениях в консоли
+        if (process.env.NODE_ENV === 'development') {
+            setTimeout(() => {
+                toast.value.showToast('Предупреждения в консоли - это нормально в режиме разработки', 'info');
+            }, 2000);
+        }
+    } else {
+        console.warn('[Hawk Test] ❌ Hawk не инициализирован');
+        toast.value.showToast('Hawk не инициализирован, проверьте консоль', 'warning');
     }
 };
 </script>
@@ -395,6 +453,37 @@ const handleLogin = async () => {
 .auth-redirect a:hover {
     color: #553c9a;
     text-decoration: underline;
+}
+
+/* Стили для кнопки тестирования Hawk */
+.hawk-test-container {
+    margin-top: 20px;
+    text-align: center;
+    padding: 10px;
+    border-top: 1px dashed #e2e8f0;
+}
+
+.hawk-test-button {
+    background-color: #f97316;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 5px;
+}
+
+.hawk-test-button:hover {
+    background-color: #ea580c;
+    transform: translateY(-1px);
+}
+
+.hawk-test-container small {
+    display: block;
+    color: #94a3b8;
+    font-size: 12px;
 }
 
 /* Адаптивность */
