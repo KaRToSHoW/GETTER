@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django_filters',
     'main',
     'users',
+    'silk',
     'django_extensions',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -56,6 +57,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'silk.middleware.SilkyMiddleware',
 ]
 
 REST_FRAMEWORK = {
