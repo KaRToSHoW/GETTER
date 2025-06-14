@@ -1,23 +1,47 @@
 <script setup>
-import { ref, defineExpose } from 'vue';
+import { ref, defineExpose, inject } from 'vue';
 
 const toasts = ref([]);
 let nextId = 0;
+const $hawk = inject('$hawk', null); // Получаем Hawk из контекста приложения
 
 const showToast = (message, type = 'info') => {
-    const id = nextId++;
-    const toast = {
-        id,
-        message,
-        type
-    };
-    toasts.value.push(toast);
-    setTimeout(() => {
-        const index = toasts.value.findIndex(t => t.id === id);
-        if (index > -1) {
-            toasts.value.splice(index, 1);
+    try {
+        const id = nextId++;
+        const toast = {
+            id,
+            message,
+            type
+        };
+        toasts.value.push(toast);
+        
+        // Отправляем в Hawk только сообщения об ошибках
+        if (type === 'error' && $hawk) {
+            $hawk.send(new Error(`Ошибка в приложении: ${message}`), {
+                toastId: id,
+                type: 'toast_error',
+                component: 'ToastNotification'
+            });
         }
-    }, 3000);
+        
+        setTimeout(() => {
+            const index = toasts.value.findIndex(t => t.id === id);
+            if (index > -1) {
+                toasts.value.splice(index, 1);
+            }
+        }, 3000);
+    } catch (error) {
+        console.error('Ошибка при отображении уведомления:', error);
+        
+        // Отправляем ошибку компонента в Hawk
+        if ($hawk) {
+            $hawk.send(error, {
+                context: 'Ошибка в компоненте уведомлений', 
+                message: message,
+                toastType: type
+            });
+        }
+    }
 };
 
 defineExpose({ showToast });
