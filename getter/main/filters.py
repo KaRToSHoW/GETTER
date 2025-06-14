@@ -1,10 +1,25 @@
 import django_filters
-from django.db.models import Avg
+from django.db.models import Avg, QuerySet
+from typing import Any, Dict, List, Optional, Union
 from .models import Product, Category
 
 class ProductFilter(django_filters.FilterSet):
     """
     Фильтр для модели Product с расширенным функционалом фильтрации.
+    
+    Attributes:
+        name: Фильтр по названию товара (частичное совпадение)
+        description: Фильтр по описанию товара (частичное совпадение)
+        sku: Фильтр по артикулу товара (частичное совпадение)
+        min_price: Фильтр по минимальной цене товара
+        max_price: Фильтр по максимальной цене товара
+        category: Фильтр по категории товара
+        category_name: Фильтр по названию категории (частичное совпадение)
+        is_available: Фильтр по наличию товара
+        min_discount: Фильтр по минимальному проценту скидки
+        has_discount: Фильтр по наличию скидки
+        min_rating: Фильтр по минимальному рейтингу товара
+        ordering: Сортировка результатов
     """
     name = django_filters.CharFilter(lookup_expr='icontains', help_text="Поиск по названию товара")
     description = django_filters.CharFilter(lookup_expr='icontains', help_text="Поиск по описанию товара")
@@ -53,18 +68,34 @@ class ProductFilter(django_filters.FilterSet):
         help_text="Сортировка результатов. Используйте '-' для обратного порядка (например: -price)"
     )
     
-    def filter_has_discount(self, queryset, name, value):
+    def filter_has_discount(self, queryset: QuerySet, name: str, value: bool) -> QuerySet:
         """
         Фильтр по наличию скидки.
+        
+        Args:
+            queryset: Исходный QuerySet продуктов
+            name: Название поля для фильтрации
+            value: Значение фильтра (True/False)
+            
+        Returns:
+            Отфильтрованный QuerySet с товарами, имеющими или не имеющими скидку
         """
         if value:  # Если True, возвращаем товары со скидкой > 0
             return queryset.filter(discount__gt=0)
         # Если False, возвращаем товары без скидки
         return queryset.filter(discount=0)
     
-    def filter_by_rating(self, queryset, name, value):
+    def filter_by_rating(self, queryset: QuerySet, name: str, value: float) -> QuerySet:
         """
         Фильтр по минимальному рейтингу.
+        
+        Args:
+            queryset: Исходный QuerySet продуктов
+            name: Название поля для фильтрации
+            value: Минимальное значение рейтинга
+            
+        Returns:
+            Отфильтрованный QuerySet с товарами, имеющими средний рейтинг не ниже указанного
         """
         # Аннотируем queryset средним рейтингом и фильтруем
         return queryset.annotate(average_rating=Avg('reviews__rating')).filter(average_rating__gte=value)
