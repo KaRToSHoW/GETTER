@@ -3,8 +3,16 @@ from django.conf import settings
 from django.utils import timezone
 from django.urls import reverse
 from decimal import Decimal
+from typing import Optional, Union, List, Dict, Any
 
 class Category(models.Model):
+    """
+    Модель категории товаров.
+    
+    Attributes:
+        name: Название категории
+        image: Изображение категории
+    """
     name = models.CharField(max_length=255, unique=True, verbose_name="Категория")
     image = models.ImageField(upload_to='category_images/', blank=True, null=True, verbose_name="Изображение")
 
@@ -12,13 +20,43 @@ class Category(models.Model):
         verbose_name = "Категория"
         verbose_name_plural = "Категории"
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """
+        Строковое представление категории.
+        
+        Returns:
+            Название категории
+        """
         return self.name
     
-    def get_absolute_url(self):
+    def get_absolute_url(self) -> str:
+        """
+        Получение абсолютного URL для категории.
+        
+        Returns:
+            URL страницы со списком категорий
+        """
         return reverse('category-list')
 
 class Product(models.Model):
+    """
+    Модель товара.
+    
+    Attributes:
+        sku: Артикул товара
+        name: Название товара
+        description: Описание товара
+        price: Цена товара
+        discount: Скидка в процентах
+        stock: Количество товара на складе
+        category: Категория товара
+        image: Изображение товара
+        manufacturer_url: URL сайта производителя
+        documentation: Документация к товару
+        is_available: Доступность товара
+        specifications: Характеристики товара в формате JSON
+        creation_date: Дата поступления товара
+    """
     sku = models.CharField(max_length=50, unique=True, verbose_name="Артикул")
     name = models.CharField(max_length=255, verbose_name="Название")
     description = models.TextField(blank=True, null=True, verbose_name="Описание")
@@ -37,28 +75,79 @@ class Product(models.Model):
         verbose_name = "Продукт"
         verbose_name_plural = "Продукты"
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """
+        Строковое представление товара.
+        
+        Returns:
+            Название товара
+        """
         return self.name
 
-    def get_absolute_url(self):
+    def get_absolute_url(self) -> str:
+        """
+        Получение абсолютного URL для товара.
+        
+        Returns:
+            URL страницы с детальной информацией о товаре
+        """
         return reverse('product-detail', kwargs={'pk': self.pk})
         
-    def get_discounted_price(self):
-        """Возвращает цену товара с учетом скидки"""
+    def get_discounted_price(self) -> Decimal:
+        """
+        Возвращает цену товара с учетом скидки.
+        
+        Returns:
+            Цена товара со скидкой
+        """
         if self.discount == 0:
             return self.price
         discount_amount = (self.price * self.discount) / 100
         return round(self.price - discount_amount, 2)
 
 class OrderManager(models.Manager):
-    def pending(self):
+    """
+    Менеджер для модели Order с дополнительными методами запросов.
+    """
+    
+    def pending(self) -> models.QuerySet:
+        """
+        Получение всех заказов в статусе "ожидает".
+        
+        Returns:
+            QuerySet с заказами в статусе "ожидает"
+        """
         return self.filter(status='pending')
 
-    def completed(self):
+    def completed(self) -> models.QuerySet:
+        """
+        Получение всех выполненных заказов.
+        
+        Returns:
+            QuerySet с заказами в статусе "отправлен" или "доставлен"
+        """
         return self.filter(status__in=['shipped', 'delivered'])
 
 
 class Order(models.Model):
+    """
+    Модель заказа.
+    
+    Attributes:
+        user: Пользователь, создавший заказ
+        products: Товары в заказе (через OrderItem)
+        status: Статус заказа
+        total_price: Общая стоимость заказа
+        created_at: Дата создания заказа
+        updated_at: Дата обновления заказа
+        order_number: Уникальный номер заказа
+        shipping_city: Город доставки
+        shipping_street: Улица доставки
+        shipping_house: Дом доставки
+        shipping_apartment: Квартира доставки
+        shipping_postal_code: Почтовый индекс доставки
+        shipping_comment: Комментарий к доставке
+    """
     objects = OrderManager()
     STATUS_CHOICES = [
         ('pending', 'Ожидает'),
@@ -89,8 +178,13 @@ class Order(models.Model):
         verbose_name = "Заказ"
         verbose_name_plural = "Заказы"
 
-    def calculate_total_price(self):
-        """Вычисляет общую стоимость заказа на основе товаров в корзине с учетом скидок"""
+    def calculate_total_price(self) -> Decimal:
+        """
+        Вычисляет общую стоимость заказа на основе товаров в корзине с учетом скидок.
+        
+        Returns:
+            Общая стоимость заказа
+        """
         total = Decimal('0.00')
         for item in self.items.all():
             if item.product:
@@ -98,7 +192,15 @@ class Order(models.Model):
                 total += item.product.get_discounted_price() * item.quantity
         return total
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """
+        Переопределенный метод сохранения для автоматической генерации номера заказа
+        и обновления общей стоимости.
+        
+        Args:
+            *args: Позиционные аргументы для метода save родительского класса
+            **kwargs: Именованные аргументы для метода save родительского класса
+        """
         is_new = self.pk is None
         super().save(*args, **kwargs)  # Сначала сохраняем объект, чтобы получить ID
         
@@ -114,14 +216,31 @@ class Order(models.Model):
                 self.total_price = new_total
                 super().save(update_fields=['total_price'])  # Сохраняем только поле total_price
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """
+        Строковое представление заказа.
+        
+        Returns:
+            Строка с номером заказа
+        """
         return f"Заказ №{self.order_number}" 
     
-    def get_absolute_url(self):
+    def get_absolute_url(self) -> str:
+        """
+        Получение абсолютного URL для заказа.
+        
+        Returns:
+            URL страницы с детальной информацией о заказе
+        """
         return reverse('order_detail', kwargs={'pk': self.pk})
 
-    def update_status_by_time(self):
-        """Обновляет статус заказа в зависимости от времени"""
+    def update_status_by_time(self) -> bool:
+        """
+        Обновляет статус заказа в зависимости от времени.
+        
+        Returns:
+            True, если статус был изменен, иначе False
+        """
         if self.status == 'pending':
             # Если заказ в ожидании более 2 дней и не обработан
             if (timezone.now() - self.created_at).days > 2:
@@ -136,8 +255,13 @@ class Order(models.Model):
                 return True
         return False
         
-    def get_shipping_address(self):
-        """Возвращает полный адрес доставки в виде строки"""
+    def get_shipping_address(self) -> str:
+        """
+        Возвращает полный адрес доставки в виде строки.
+        
+        Returns:
+            Строка с полным адресом доставки или сообщение об отсутствии адреса
+        """
         address_parts = []
         if self.shipping_city:
             address_parts.append(self.shipping_city)
@@ -153,26 +277,57 @@ class Order(models.Model):
         return ", ".join(address_parts) if address_parts else "Адрес не указан"
 
 class OrderItem(models.Model):
+    """
+    Модель позиции заказа.
+    
+    Attributes:
+        order: Заказ, к которому относится позиция
+        product: Товар в позиции
+        quantity: Количество товара
+    """
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items", verbose_name="Заказ")
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="order_items", verbose_name="Товар")
-    quantity = models.PositiveIntegerField( verbose_name="Количество")
+    quantity = models.PositiveIntegerField(verbose_name="Количество")
 
     class Meta:
         verbose_name = "Позиция заказа"
         verbose_name_plural = "Позиции заказов"
         
     @property
-    def price(self):
-        """Вычисляет итоговую цену за позицию заказа с учетом скидки"""
+    def price(self) -> Decimal:
+        """
+        Вычисляет итоговую цену за позицию заказа с учетом скидки.
+        
+        Returns:
+            Итоговая цена за позицию или 0, если товар не найден
+        """
         if self.product:
             return self.product.get_discounted_price() * self.quantity
         return 0
         
-    def __str__(self):
+    def __str__(self) -> str:
+        """
+        Строковое представление позиции заказа.
+        
+        Returns:
+            Строка с информацией о товаре, количестве и номере заказа
+        """
         return f"{self.product.name} x {self.quantity} в заказе №{self.order.id}"
 
 
 class Review(models.Model):
+    """
+    Модель отзыва на товар.
+    
+    Attributes:
+        user: Пользователь, оставивший отзыв
+        product: Товар, на который оставлен отзыв
+        rating: Рейтинг товара (от 1 до 5)
+        comment: Комментарий к отзыву
+        pros: Достоинства товара
+        cons: Недостатки товара
+        created_at: Дата создания отзыва
+    """
     RATING_CHOICES = [(i, str(i)) for i in range(1, 6)] 
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reviews", verbose_name="Пользоваетль")
@@ -188,10 +343,24 @@ class Review(models.Model):
         verbose_name = "Отзыв"
         verbose_name_plural = "Отзывы"
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """
+        Строковое представление отзыва.
+        
+        Returns:
+            Строка с информацией о пользователе и рейтинге
+        """
         return f"Отзыв от {self.user.username} - {self.rating}"
 
 class Wishlist(models.Model):
+    """
+    Модель списка желаемых товаров пользователя.
+    
+    Attributes:
+        user: Пользователь, добавивший товар в список желаемого
+        product: Товар, добавленный в список желаемого
+        added_at: Дата добавления товара в список
+    """
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="wishlist", verbose_name="Пользователь")
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="wishlisted_by", verbose_name="Продукт")
     added_at = models.DateTimeField(auto_now_add=True, verbose_name="Добавлен")
@@ -201,5 +370,11 @@ class Wishlist(models.Model):
         verbose_name = "Список желаемого"
         verbose_name_plural = "Списки желаемого"
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """
+        Строковое представление элемента списка желаемого.
+        
+        Returns:
+            Строка с информацией о пользователе и товаре
+        """
         return f"{self.user.username} - {self.product.name}"

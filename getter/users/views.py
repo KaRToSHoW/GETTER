@@ -13,19 +13,45 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
+from typing import List, Dict, Any, Union, Optional, Type
+from rest_framework.permissions import BasePermission
+from rest_framework.request import Request
 
 class UserViewSet(viewsets.ModelViewSet):
+    """
+    Вьюсет для модели User.
+    
+    Обеспечивает CRUD операции для пользователей с проверкой прав доступа.
+    """
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [IsAdminOrSelf]  # Используем новое разрешение
 
-    def get_permissions(self):
+    def get_permissions(self) -> List[BasePermission]:
+        """
+        Возвращает список разрешений в зависимости от действия.
+        
+        Для создания пользователя (регистрации) разрешаем доступ всем.
+        Для остальных действий используем стандартные разрешения.
+        
+        Returns:
+            Список объектов разрешений
+        """
         if self.action == 'create':
             return [AllowAny()]
         return super().get_permissions()
 
 @api_view(['POST'])
-def register_api(request):
+def register_api(request: Request) -> Response:
+    """
+    API для регистрации нового пользователя.
+    
+    Args:
+        request: Объект запроса с данными пользователя
+        
+    Returns:
+        Response с сообщением об успешной регистрации или ошибке
+    """
     username = request.data.get('username')
     email = request.data.get('email')
     password = request.data.get('password')
@@ -41,8 +67,19 @@ def register_api(request):
 
 @api_view(['GET', 'PUT'])
 @permission_classes([IsAuthenticated])
-def profile(request):
-    """ Обработка GET и PUT запросов для профиля пользователя """
+def profile(request: Request) -> Response:
+    """
+    Обработка GET и PUT запросов для профиля пользователя.
+    
+    GET: Возвращает данные профиля текущего пользователя.
+    PUT: Обновляет данные профиля текущего пользователя.
+    
+    Args:
+        request: Объект запроса
+        
+    Returns:
+        Response с данными профиля или результатом обновления
+    """
     user = request.user
 
     if request.method == 'GET':
@@ -58,8 +95,16 @@ def profile(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def upload_profile_image(request):
-    """ Загрузка изображения профиля """
+def upload_profile_image(request: Request) -> Response:
+    """
+    Загрузка изображения профиля пользователя.
+    
+    Args:
+        request: Объект запроса с файлом изображения
+        
+    Returns:
+        Response с сообщением об успешной загрузке или ошибке
+    """
     if 'profile_image' not in request.FILES:
         return Response({'error': 'Изображение не загружено'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -74,8 +119,16 @@ def upload_profile_image(request):
 
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
-def remove_profile_image(request):
-    """ Удаление изображения профиля """
+def remove_profile_image(request: Request) -> Response:
+    """
+    Удаление изображения профиля пользователя.
+    
+    Args:
+        request: Объект запроса
+        
+    Returns:
+        Response с сообщением об успешном удалении или ошибке
+    """
     user = request.user
     if user.profile_image:
         user.profile_image.delete()  # Удаляем файл с диска
