@@ -56,6 +56,7 @@ class Product(models.Model):
         is_available: Доступность товара
         specifications: Характеристики товара в формате JSON
         creation_date: Дата поступления товара
+        updated_at: Дата и время обновления товара
     """
     sku = models.CharField(max_length=50, unique=True, verbose_name="Артикул")
     name = models.CharField(max_length=255, verbose_name="Название")
@@ -70,6 +71,7 @@ class Product(models.Model):
     is_available = models.BooleanField(default=True, verbose_name="В наличии")
     specifications = models.JSONField(blank=True, null=True, verbose_name="Характеристики")
     creation_date = models.DateTimeField(default=timezone.now, verbose_name="Дата поступления")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлен")
 
     class Meta:
         verbose_name = "Продукт"
@@ -150,19 +152,18 @@ class Order(models.Model):
     """
     objects = OrderManager()
     STATUS_CHOICES = [
-        ('pending', 'Ожидает'),
-        ('assembling', 'В сборке'),
+        ('pending', 'В обработке'),
         ('shipped', 'Отправлен'),
         ('delivered', 'Доставлен'),
-        ('canceled', 'Отменен')
+        ('canceled', 'Отменен'),
     ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="orders", verbose_name="Пользователь")
     products = models.ManyToManyField(Product, through='OrderItem', related_name="orders")
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending', verbose_name="Статус")
-    total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    created_at = models.DateTimeField(default=timezone.now, verbose_name="Создан")
-    updated_at = models.DateTimeField(auto_now=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="Статус")
+    total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Общая стоимость")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлен")
     order_number = models.CharField(max_length=20, unique=True, blank=True, null=True, verbose_name="Номер заказа")  
     
     # Поля информации о доставке
@@ -236,24 +237,41 @@ class Order(models.Model):
 
     def update_status_by_time(self) -> bool:
         """
-        Обновляет статус заказа в зависимости от времени.
+        Обновляет статус заказа на основе времени.
+        
+        Правила:
+        - Если заказ в статусе 'pending' более 7 дней, отменяем его
+        - Если заказ в статусе 'shipped' более 3 дней, помечаем как доставленный
         
         Returns:
-            True, если статус был изменен, иначе False
+            bool: True, если статус был изменен, иначе False
         """
+        import datetime
+        from django.utils import timezone
+        
+        now = timezone.now()
+        status_changed = False
+        
+        # Отменяем заказы, которые в обработке более 7 дней
         if self.status == 'pending':
-            # Если заказ в ожидании более 2 дней и не обработан
-            if (timezone.now() - self.created_at).days > 2:
+            days_pending = (now - self.created_at).days
+            if days_pending > 7:
                 self.status = 'canceled'
-                self.save()
-                return True
+                status_changed = True
+        
+        # Помечаем отправленные заказы как доставленные через 3 дня
         elif self.status == 'shipped':
-            # Если заказ отправлен более 7 дней назад, считаем доставленным
-            if (timezone.now() - self.updated_at).days > 7:
+            # Проверяем, когда заказ был отмечен как отправленный
+            # Используем updated_at как приблизительное время отправки
+            days_shipped = (now - self.updated_at).days
+            if days_shipped > 3:
                 self.status = 'delivered'
-                self.save()
-                return True
-        return False
+                status_changed = True
+        
+        if status_changed:
+            self.save(update_fields=['status', 'updated_at'])
+            
+        return status_changed
         
     def get_shipping_address(self) -> str:
         """
