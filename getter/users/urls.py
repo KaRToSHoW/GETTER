@@ -29,6 +29,9 @@ urlpatterns = [
     path('profile/', views.profile, name='profile'),
     path('profile/image/', views.upload_profile_image, name='upload-profile-image'),
     path('profile/image/remove/', views.remove_profile_image, name='remove-profile-image'),
+    
+    # Email testing
+    path('test-email/', views.test_email, name='test-email'),
 ]
 
 

@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import User
 from .permissions import IsAdminOrSelf
+from .utils import send_welcome_email, send_password_reset_email, send_order_confirmation_email
 
 from rest_framework import viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -136,3 +137,45 @@ def remove_profile_image(request: Request) -> Response:
         user.save()
         return Response({'message': 'Изображение успешно удалено'}, status=status.HTTP_200_OK)
     return Response({'error': 'Изображение не найдено'}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def test_email(request: Request) -> Response:
+    """
+    Тестовый API-эндпоинт для отправки различных типов писем
+    
+    Args:
+        request: Объект запроса с типом письма
+        
+    Returns:
+        Response с сообщением об успешной отправке или ошибке
+    """
+    email_type = request.data.get('email_type', 'welcome')
+    user_email = request.user.email
+    
+    if not user_email:
+        return Response({'error': 'У вашего аккаунта не указан email адрес'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        if email_type == 'welcome':
+            send_welcome_email(user_email)
+            message = 'Приветственное письмо отправлено'
+        elif email_type == 'password_reset':
+            reset_link = f"http://localhost:8080/reset-password/?token=test_token_{request.user.id}"
+            send_password_reset_email(user_email, reset_link)
+            message = 'Письмо для сброса пароля отправлено'
+        elif email_type == 'order':
+            order_details = """
+            Товар 1 - 2 шт. - 1000 руб.
+            Товар 2 - 1 шт. - 500 руб.
+            Итого: 1500 руб.
+            """
+            send_order_confirmation_email(user_email, "12345", order_details)
+            message = 'Письмо с подтверждением заказа отправлено'
+        else:
+            return Response({'error': 'Неизвестный тип письма'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response({'message': message}, status=status.HTTP_200_OK)
+    
+    except Exception as e:
+        return Response({'error': f'Ошибка при отправке письма: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

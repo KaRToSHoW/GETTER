@@ -13,6 +13,7 @@ from decimal import Decimal
 from .models import Category, Product, Order, OrderItem, Review, Wishlist
 from .serializers import CategorySerializer, ProductSerializer, OrderSerializer, ReviewSerializer, OrderItemSerializer, WishlistSerializer
 from .filters import ProductFilter
+from users.utils import send_order_status_update
 
 class CategoryListView(APIView):
     permission_classes = [AllowAny]
@@ -522,12 +523,34 @@ def create_order(request):
 def user_orders(request):
     """Получение всех заказов пользователя с полной информацией"""
     try:
-        # Получаем все заказы пользователя, кроме корзины
-        user_orders = Order.objects.filter(
-            user=request.user
-        ).exclude(
-            status='pending'
-        ).order_by('-created_at')
+        # Проверяем, запрашивает ли админ все заказы
+        is_admin_request = request.user.is_superuser and request.query_params.get('admin') == 'true'
+        
+        # Базовый запрос для заказов
+        orders_query = Order.objects
+        
+        # Если это не админ или админ не запрашивает все заказы, фильтруем по пользователю
+        if not is_admin_request:
+            orders_query = orders_query.filter(user=request.user)
+        
+        # Исключаем корзины (статус pending)
+        orders_query = orders_query.exclude(status='pending')
+        
+        # Применяем фильтры, если они указаны
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            orders_query = orders_query.filter(status=status_filter)
+            
+        date_from = request.query_params.get('date_from')
+        if date_from:
+            orders_query = orders_query.filter(created_at__gte=date_from)
+            
+        date_to = request.query_params.get('date_to')
+        if date_to:
+            orders_query = orders_query.filter(created_at__lte=date_to)
+        
+        # Сортируем по дате создания (сначала новые)
+        user_orders = orders_query.order_by('-created_at')
         
         # Группируем заказы по статусу
         pending_orders = user_orders.filter(status__in=['assembling'])
@@ -548,17 +571,33 @@ def user_orders(request):
                     'price': float(item.product.price),
                     'quantity': item.quantity,
                     'image': item.product.image.url if item.product.image else None,
-                    'product_id': item.product.id
+                    'product_id': item.product.id,
+                    'product': {
+                        'id': item.product.id,
+                        'name': item.product.name,
+                        'price': float(item.product.price),
+                        'image': item.product.image.url if item.product.image else None,
+                    }
                 })
             
-            orders_data.append({
+            # Подготавливаем информацию о заказе
+            order_data = {
                 'id': order.id,
-                'number': order.order_number,
-                'date': order.created_at,
+                'order_number': order.order_number,
+                'created_at': order.created_at,
                 'status': order.status,
-                'total': float(order.total_price),
-                'items': order_items
-            })
+                'total_price': float(order.total_price),
+                'items': order_items,
+                'shipping_address': order.get_shipping_address(),
+            }
+            
+            # Добавляем информацию о пользователе для админа
+            if is_admin_request:
+                order_data['user_id'] = order.user.id
+                order_data['user_username'] = order.user.username
+                order_data['user_email'] = order.user.email
+            
+            orders_data.append(order_data)
         
         return Response({
             'orders': orders_data,
@@ -828,3 +867,65 @@ def check_user_purchased_product(request, product_id):
             'user_id': request.user.id,
             'product_id': product_id
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def send_order_notification(request, order_id):
+    """
+    Отправляет уведомление клиенту о статусе заказа
+    """
+    try:
+        # Проверяем, что пользователь - администратор
+        if not request.user.is_superuser:
+            return Response(
+                {'error': 'Только администратор может отправлять уведомления о статусе заказа'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
+        # Получаем заказ
+        order = get_object_or_404(Order, id=order_id)
+        
+        # Получаем данные из запроса
+        status_update = request.data.get('status')
+        comment = request.data.get('comment', '')
+        
+        if not status_update:
+            return Response({'error': 'Необходимо указать статус заказа'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Проверяем, что статус валидный
+        valid_statuses = ['pending', 'assembling', 'shipped', 'delivered', 'canceled']
+        if status_update not in valid_statuses:
+            return Response({'error': 'Неверный статус заказа'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Обновляем статус заказа
+        old_status = order.status
+        order.status = status_update
+        order.save()
+        
+        # Отправляем уведомление по email
+        if order.user.email:
+            send_order_status_update(
+                order.user.email,
+                order.order_number,
+                status_update,
+                comment
+            )
+            
+            return Response({
+                'message': f'Уведомление о статусе заказа отправлено на {order.user.email}',
+                'order_id': order.id,
+                'old_status': old_status,
+                'new_status': status_update
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                'message': 'Статус заказа обновлен, но уведомление не отправлено: у пользователя не указан email',
+                'order_id': order.id,
+                'old_status': old_status,
+                'new_status': status_update
+            }, status=status.HTTP_200_OK)
+            
+    except Order.DoesNotExist:
+        return Response({'error': 'Заказ не найден'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

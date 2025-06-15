@@ -6,6 +6,7 @@
             <button @click="createNewProduct" class="admin-button create">Добавить новый товар</button>
             <button @click="createNewCategory" class="admin-button create">Добавить новую категорию</button>
             <button @click="manageUsers" class="admin-button manage">Управление пользователями</button>
+            <button @click="manageOrders" class="admin-button orders">Управление заказами</button>
         </div>
 
         <!-- Модальные окна -->
@@ -33,6 +34,11 @@
             @close="closeCategoryCreate"
             @category-created="handleCategoryCreated"
         />
+        
+        <AdminOrderManagement
+            v-if="showOrderManagement"
+            @close="closeOrderManagement"
+        />
     </div>
 </template>
 
@@ -42,6 +48,7 @@ import AdminUserManagement from './AdminUserManagement.vue';
 import AdminUserDetails from './AdminUserDetails.vue';
 import AdminCreateProduct from './AdminCreateProduct.vue';
 import AdminCreateCategory from './AdminCreateCategory.vue';
+import AdminOrderManagement from './AdminOrderManagement.vue';
 import ToastNotification from '../ToastNotification.vue';
 
 const toast = ref(null);
@@ -51,6 +58,7 @@ const showUserManagement = ref(false);
 const showUserDetailsModal = ref(false);
 const showCreateProductForm = ref(false);
 const showCategoryForm = ref(false);
+const showOrderManagement = ref(false);
 
 // User details state
 const selectedUser = ref(null);
@@ -77,6 +85,10 @@ const manageUsers = () => {
     showUserManagement.value = true;
 };
 
+const manageOrders = () => {
+    showOrderManagement.value = true;
+};
+
 const closeUserManagement = () => {
     showUserManagement.value = false;
 };
@@ -97,6 +109,10 @@ const closeCreateProduct = () => {
 
 const closeCategoryCreate = () => {
     showCategoryForm.value = false;
+};
+
+const closeOrderManagement = () => {
+    showOrderManagement.value = false;
 };
 
 const handleProductCreated = () => {
@@ -169,5 +185,14 @@ const emit = defineEmits(['product-created', 'category-created']);
 
 .admin-button.manage:hover {
     background: linear-gradient(135deg, #1976d2, #1565c0);
+}
+
+.admin-button.orders {
+    background: linear-gradient(135deg, #4caf50, #388e3c);
+    color: white;
+}
+
+.admin-button.orders:hover {
+    background: linear-gradient(135deg, #388e3c, #2e7d32);
 }
 </style>
