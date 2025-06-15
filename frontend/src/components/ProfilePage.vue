@@ -295,6 +295,32 @@
                     </div>
                 </div>
             </div>
+
+            <div class="email-testing-section" >
+                <h3>Тестирование отправки писем</h3>
+                <div class="email-testing-info">
+                    <p>Текущий email для тестирования: <strong>{{ user.email || 'Не указан' }}</strong></p>
+                    <div v-if="!user.email" class="email-warning">
+                        Внимание: у вас не указан email адрес. Для тестирования отправки писем необходимо указать email.
+                    </div>
+                </div>
+
+                <div class="email-testing-buttons" v-if="user.email">
+                    <button @click="sendTestEmail('welcome')" class="email-test-btn">
+                        Отправить приветственное письмо
+                    </button>
+                    <button @click="sendTestEmail('password_reset')" class="email-test-btn">
+                        Отправить письмо для сброса пароля
+                    </button>
+                    <button @click="sendTestEmail('order')" class="email-test-btn">
+                        Отправить подтверждение заказа
+                    </button>
+                </div>
+                
+                <div class="mailhog-info">
+                    <p>Посмотреть отправленные письма можно в <a href="http://localhost:8025" target="_blank">Mailhog</a></p>
+                </div>
+            </div>
         </div>
     </div>
 </template>
@@ -738,6 +764,41 @@ const calculateItemPrice = (item) => {
         return item.discounted_price * item.quantity;
     } else {
         return item.price * item.quantity;
+    }
+};
+
+const sendTestEmail = async (emailType) => {
+    try {
+        const response = await axios.post(
+            'http://127.0.0.1:8000/users/test-email/',
+            { email_type: emailType },
+            { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+        );
+        
+        // Используем Hawk для отслеживания успешной отправки
+        if (currentUser.value.hawk) {
+            currentUser.value.hawk.sendMessage('Письмо успешно отправлено', 'success', {
+                type: emailType,
+                email: currentUser.value.email
+            });
+        }
+        
+        // Выводим уведомление
+        alert(response.data.message);
+    } catch (error) {
+        console.error('Ошибка при отправке тестового письма:', error);
+        
+        // Используем Hawk для отслеживания ошибки
+        if (currentUser.value.hawk) {
+            currentUser.value.hawk.sendError(error, {
+                type: 'email_sending_error',
+                emailType,
+                email: currentUser.value?.email
+            });
+        }
+        
+        // Выводим сообщение об ошибке
+        alert('Ошибка при отправке письма');
     }
 };
 </script>
@@ -1587,5 +1648,59 @@ const calculateItemPrice = (item) => {
     font-style: italic;
     color: #718096;
     font-size: 14px;
+}
+
+.email-testing-section {
+    margin-top: 30px;
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.email-testing-section h3 {
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.email-testing-info {
+    margin-bottom: 20px;
+}
+
+.email-warning {
+    color: #dc3545;
+    font-size: 0.9em;
+    margin-top: 5px;
+}
+
+.email-testing-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.email-test-btn {
+    background-color: #6b46c1;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 10px 15px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.email-test-btn:hover {
+    background-color: #553c9a;
+}
+
+.mailhog-info {
+    font-size: 0.9em;
+    color: #6c757d;
+}
+
+.mailhog-info a {
+    color: #6b46c1;
+    text-decoration: underline;
 }
 </style>
