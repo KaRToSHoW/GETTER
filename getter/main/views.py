@@ -157,9 +157,32 @@ class ReviewListCreateView(APIView):
     def post(self, request, product_id):
         try:
             product = Product.objects.get(id=product_id)
+            
+            # Проверяем, покупал ли пользователь товар (если он не админ)
+            if not request.user.is_superuser:
+                has_purchased = OrderItem.objects.filter(
+                    order__user=request.user,
+                    product=product,
+                    order__status__in=['shipped', 'delivered']  # Только доставленные или отправленные заказы
+                ).exists()
+                
+                if not has_purchased:
+                    return Response(
+                        {'error': 'Вы можете оставить отзыв только на приобретенный товар'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            
+            # Проверяем рейтинг
+            rating = request.data.get('rating')
+            if not rating or not isinstance(rating, int) or rating < 1 or rating > 5:
+                return Response(
+                    {'error': 'Пожалуйста, укажите рейтинг от 1 до 5'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
             # Добавляем product и user в контекст сериализатора
             serializer = ReviewSerializer(data={
-                'rating': request.data.get('rating'),
+                'rating': rating,
                 'comment': request.data.get('comment'),
                 'pros': request.data.get('pros', ''),
                 'cons': request.data.get('cons', '')
@@ -168,9 +191,11 @@ class ReviewListCreateView(APIView):
                 'product': product,
                 'user': request.user
             })
+            
             if serializer.is_valid():
                 review = serializer.save()  # Сохраняем с уже установленным контекстом
                 return Response(ReviewSerializer(review, context={'request': request}).data, status=status.HTTP_201_CREATED)
+            
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Product.DoesNotExist:
             return Response({'error': 'Продукт не найден'}, status=status.HTTP_404_NOT_FOUND)
@@ -295,13 +320,6 @@ def add_to_cart(request):
             print("Ошибка: product_id отсутствует")
             return Response({'error': 'product_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        product = Product.objects.get(id=product_id)
-        print(f"Найден продукт: {product.name}, Остаток: {product.stock}")
-
-        if product.stock < quantity:
-            print("Ошибка: недостаточно товара на складе")
-            return Response({'error': 'Недостаточно товара на складе'}, status=status.HTTP_400_BAD_REQUEST)
-
         # Проверяем, есть ли у пользователя несколько корзин (заказов со статусом pending)
         pending_orders = Order.objects.filter(user=request.user, status='pending')
         if pending_orders.count() > 1:
@@ -314,26 +332,46 @@ def add_to_cart(request):
             # Если корзины нет или она одна, используем стандартную логику
             order, created = Order.objects.get_or_create(user=request.user, status='pending')
             print(f"Текущий заказ: {order.id}, создан ли новый: {created}")
-
-        order_item, created = OrderItem.objects.get_or_create(
-            order=order,
-            product=product,
-            defaults={"quantity": quantity}  # Устанавливаем quantity сразу при создании
-        )
-
-        if not created:
-            order_item.quantity += quantity  # Если уже есть, увеличиваем количество
-            order_item.save()
-
+            
+        # Подготавливаем данные для валидации
+        order_item_data = {
+            'product_id': product_id,
+            'quantity': quantity
+        }
+        
+        # Проверяем существующий элемент в корзине
+        existing_item = OrderItem.objects.filter(order=order, product_id=product_id).first()
+        
+        if existing_item:
+            # Если товар уже есть в корзине, увеличиваем его количество
+            item_serializer = OrderItemSerializer(
+                existing_item, 
+                data={'product_id': product_id, 'quantity': existing_item.quantity + quantity},
+                partial=True
+            )
+        else:
+            # Если товара нет в корзине, создаем новый элемент
+            item_serializer = OrderItemSerializer(data={
+                'order': order.id,
+                'product_id': product_id,
+                'quantity': quantity
+            })
+        
+        # Проверяем валидность данных
+        if not item_serializer.is_valid():
+            print(f"Ошибки валидации: {item_serializer.errors}")
+            return Response(item_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Сохраняем элемент корзины
+        item_serializer.save(order=order)
+        
+        # Обновляем общую стоимость заказа
         order.save()  # Пересчитываем total_price
         print(f"Итоговая сумма заказа: {order.total_price}")
-
-        serializer = OrderSerializer(order)
+        
+        # Возвращаем обновленную корзину
+        serializer = OrderSerializer(order, context={'request': request})
         return Response(serializer.data, status=status.HTTP_200_OK)
-
-    except Product.DoesNotExist:
-        print("Ошибка: Продукт не найден")
-        return Response({'error': 'Продукт не найден'}, status=status.HTTP_404_NOT_FOUND)
 
     except Exception as e:
         print("Ошибка:", str(e))  # Логируем любую другую ошибку
@@ -419,33 +457,29 @@ def create_order(request):
         
         print(f"Корзина содержит {cart.items.count()} товаров")
         
-        # Проверяем доступность всех товаров
-        for item in cart.items.all():
-            print(f"Проверка товара: {item.product.name} (ID: {item.product.id})")
-            print(f"Количество в корзине: {item.quantity}, На складе: {item.product.stock}")
-            
-            if item.quantity > item.product.stock:
-                error_msg = f'Недостаточно товара "{item.product.name}" на складе. Доступно: {item.product.stock}'
-                print(f"Ошибка: {error_msg}")
-                return Response({
-                    'error': error_msg
-                }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Обновляем статус заказа на "в сборке"
-        print("Обновляем статус заказа на 'в сборке'")
-        cart.status = 'assembling'
-        
-        # Получение и сохранение данных доставки из запроса
+        # Получение данных доставки из запроса
         print("Получение данных доставки из запроса:")
         shipping_data = request.data.get('shipping', {})
-        cart.shipping_city = shipping_data.get('city')
-        cart.shipping_street = shipping_data.get('street')
-        cart.shipping_house = shipping_data.get('house')
-        cart.shipping_apartment = shipping_data.get('apartment')
-        cart.shipping_postal_code = shipping_data.get('postal_code')
-        cart.shipping_comment = shipping_data.get('comment')
         
-        print(f"Адрес доставки: {cart.get_shipping_address()}")
+        # Обновляем заказ данными для валидации
+        order_data = {
+            'status': 'assembling',
+            'shipping_city': shipping_data.get('city'),
+            'shipping_street': shipping_data.get('street'),
+            'shipping_house': shipping_data.get('house'),
+            'shipping_apartment': shipping_data.get('apartment'),
+            'shipping_postal_code': shipping_data.get('postal_code'),
+            'shipping_comment': shipping_data.get('comment'),
+        }
+        
+        # Валидируем и обновляем заказ через сериализатор
+        serializer = OrderSerializer(cart, data=order_data, partial=True, context={'request': request})
+        if not serializer.is_valid():
+            print(f"Ошибки валидации: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Если валидация прошла, обновляем заказ
+        serializer.save()
         
         # Генерируем номер заказа, если его нет
         if not cart.order_number:
@@ -454,45 +488,14 @@ def create_order(request):
             random_suffix = ''.join([str(random.randint(0, 9)) for _ in range(4)])
             cart.order_number = f"ORD-{timestamp}-{random_suffix}"
             print(f"Сгенерирован номер заказа: {cart.order_number}")
-        
-        # Вычисляем итоговую сумму заказа
-        total_price = Decimal('0.00')
-        print("Расчет итоговой суммы заказа:")
-        for item in cart.items.all():
-            # Используем метод get_discounted_price для учета скидки
-            item_price = item.product.get_discounted_price() * item.quantity
-            print(f"Товар: {item.product.name}, Количество: {item.quantity}, Цена за ед.: {item.product.get_discounted_price()} (скидка {item.product.discount}%), Итого: {item_price}")
-            total_price += item_price
-            
-        print(f"Итоговая сумма заказа: {total_price}")
-        cart.total_price = total_price
-        
-        # Сохраняем изменения в заказе
-        try:
-            cart.save()
-            print(f"Заказ сохранен с ID: {cart.id}, статус: {cart.status}, сумма: {cart.total_price}")
-        except Exception as save_error:
-            print(f"Ошибка при сохранении заказа: {str(save_error)}")
-            return Response({'error': f'Ошибка при сохранении заказа: {str(save_error)}'}, 
-                           status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            cart.save(update_fields=['order_number'])
         
         # Обновляем количество товаров на складе
-        print("Обновляем количество товаров на складе:")
         for item in cart.items.all():
-            try:
-                product = item.product
-                old_stock = product.stock
-                product.stock -= item.quantity
-                print(f"Товар: {product.name}, Было: {old_stock}, Стало: {product.stock}")
-                
-                if product.stock <= 0:
-                    product.is_available = False
-                    print(f"Товар {product.name} помечен как недоступный")
-                    
-                product.save()
-            except Exception as product_error:
-                print(f"Ошибка при обновлении товара {item.product.name}: {str(product_error)}")
-                # Продолжаем выполнение, не прерываем процесс
+            product = item.product
+            product.stock -= item.quantity
+            product.save(update_fields=['stock'])
+            print(f"Уменьшено количество товара '{product.name}' на складе на {item.quantity}. Остаток: {product.stock}")
         
         # Создаем новую пустую корзину для пользователя
         try:

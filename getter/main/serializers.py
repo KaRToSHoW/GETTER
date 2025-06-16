@@ -3,6 +3,7 @@ from rest_framework import serializers
 from .models import Category, Product, Order, OrderItem, Review, Wishlist
 from users.serializers import UserSerializer
 from typing import Dict, Any, List, Optional, Union
+from decimal import Decimal
 
 class CategorySerializer(serializers.ModelSerializer):
     """
@@ -131,11 +132,13 @@ class OrderItemSerializer(serializers.ModelSerializer):
         price: Вычисляемое поле для цены позиции заказа
     """
     product = ProductSerializer(read_only=True)
+    product_id = serializers.IntegerField(write_only=True)
+    quantity = serializers.IntegerField(min_value=1)
     price = serializers.SerializerMethodField()
 
     class Meta:
         model = OrderItem
-        fields = ['id', 'order', 'product', 'quantity', 'price']
+        fields = ['id', 'order', 'product', 'product_id', 'quantity', 'price']
 
     def get_price(self, obj: OrderItem) -> float:
         """
@@ -150,6 +153,29 @@ class OrderItemSerializer(serializers.ModelSerializer):
         if obj.product:
             return float(obj.product.get_discounted_price() * obj.quantity)
         return 0.0
+    
+    def validate(self, attrs):
+        """
+        Валидирует наличие товара на складе при создании или обновлении позиции заказа
+        """
+        product_id = attrs.get('product_id')
+        quantity = attrs.get('quantity', 1)
+        
+        try:
+            product = Product.objects.get(id=product_id)
+            
+            # Проверяем наличие товара на складе
+            if quantity > product.stock:
+                raise serializers.ValidationError({
+                    'quantity': f'Недостаточно товара на складе. Доступно: {product.stock}'
+                })
+                
+        except Product.DoesNotExist:
+            raise serializers.ValidationError({
+                'product_id': 'Указанный товар не найден'
+            })
+            
+        return attrs
 
 class OrderSerializer(serializers.ModelSerializer):
     """
@@ -198,6 +224,90 @@ class OrderSerializer(serializers.ModelSerializer):
             Строка с полным адресом доставки
         """
         return obj.get_shipping_address()
+    
+    def validate(self, attrs):
+        """
+        Валидирует данные заказа:
+        - Проверяет обязательные поля адреса доставки
+        - Проверяет формат почтового индекса
+        - Проверяет минимальную и максимальную сумму заказа
+        - Проверяет наличие товаров на складе
+        """
+        # Получаем текущий контекст - при создании, обновлении или без изменений
+        is_create = self.instance is None
+        is_update = self.instance is not None and attrs.get('status') == 'assembling'
+        
+        # Проверяем только при создании заказа или изменении статуса на "в сборке"
+        if is_create or is_update:
+            # Проверка адреса доставки
+            shipping_city = attrs.get('shipping_city')
+            shipping_street = attrs.get('shipping_street')
+            shipping_house = attrs.get('shipping_house')
+            shipping_postal_code = attrs.get('shipping_postal_code')
+            
+            # Проверка обязательных полей
+            if not shipping_city:
+                raise serializers.ValidationError({'shipping_city': 'Пожалуйста, укажите город'})
+            
+            if not shipping_street:
+                raise serializers.ValidationError({'shipping_street': 'Пожалуйста, укажите улицу'})
+                
+            if not shipping_house:
+                raise serializers.ValidationError({'shipping_house': 'Пожалуйста, укажите номер дома'})
+            
+            # Проверка формата города (только кириллические буквы)
+            if shipping_city and not all(c.isalpha() or c.isspace() or c == '-' for c in shipping_city):
+                raise serializers.ValidationError({
+                    'shipping_city': 'Название города должно содержать только кириллические буквы'
+                })
+            
+            # Проверка формата улицы
+            if shipping_street and not all(c.isalnum() or c.isspace() or c in '.,/-' for c in shipping_street):
+                raise serializers.ValidationError({
+                    'shipping_street': 'Название улицы содержит недопустимые символы'
+                })
+            
+            # Проверка формата номера дома
+            if shipping_house and not all(c.isalnum() or c in '/-' for c in shipping_house):
+                raise serializers.ValidationError({
+                    'shipping_house': 'Недопустимый формат номера дома'
+                })
+            
+            # Проверка почтового индекса (6 цифр для России)
+            if shipping_postal_code:
+                if not shipping_postal_code.isdigit() or len(shipping_postal_code) != 6:
+                    raise serializers.ValidationError({
+                        'shipping_postal_code': 'Почтовый индекс должен состоять из 6 цифр'
+                    })
+            
+            # Проверка минимальной и максимальной суммы заказа
+            MIN_ORDER_AMOUNT = Decimal('500.00')
+            MAX_ORDER_AMOUNT = Decimal('100000.00')
+            
+            # Если это создание заказа или установка суммы вручную
+            if is_create or 'total_price' in attrs:
+                total_price = attrs.get('total_price')
+                
+                if total_price and total_price < MIN_ORDER_AMOUNT:
+                    raise serializers.ValidationError({
+                        'total_price': f'Минимальная сумма заказа составляет {MIN_ORDER_AMOUNT} ₽'
+                    })
+                
+                if total_price and total_price > MAX_ORDER_AMOUNT:
+                    raise serializers.ValidationError({
+                        'total_price': f'Максимальная сумма заказа составляет {MAX_ORDER_AMOUNT} ₽'
+                    })
+            
+            # Проверка наличия товаров на складе (только для экземпляра)
+            if self.instance:
+                for item in self.instance.items.all():
+                    if item.quantity > item.product.stock:
+                        raise serializers.ValidationError({
+                            'items': f'Недостаточно товара "{item.product.name}" на складе. '
+                                     f'Доступно: {item.product.stock}'
+                        })
+        
+        return attrs
 
 class ReviewSerializer(serializers.ModelSerializer):
     """
@@ -209,10 +319,41 @@ class ReviewSerializer(serializers.ModelSerializer):
     """
     user = UserSerializer(read_only=True)
     product = ProductSerializer(read_only=True)
+    rating = serializers.IntegerField(min_value=1, max_value=5)
 
     class Meta:
         model = Review
         fields = ['id', 'user', 'product', 'rating', 'comment', 'pros', 'cons', 'created_at']
+
+    def validate(self, attrs):
+        """
+        Проверяет право пользователя оставлять отзыв на товар
+        """
+        # Получаем пользователя и товар из контекста
+        user = self.context.get('user')
+        product = self.context.get('product')
+        
+        if not product or not user:
+            raise serializers.ValidationError("Product or user is missing in context")
+        
+        # Если пользователь администратор, он может оставлять отзывы на любой товар
+        if user.is_superuser:
+            return attrs
+            
+        # Проверяем, покупал ли пользователь данный товар
+        from .models import OrderItem
+        has_purchased = OrderItem.objects.filter(
+            order__user=user,
+            product=product,
+            order__status__in=['shipped', 'delivered']  # Только доставленные или отправленные заказы
+        ).exists()
+        
+        if not has_purchased:
+            raise serializers.ValidationError(
+                "Вы можете оставить отзыв только на приобретенный товар"
+            )
+            
+        return attrs
 
     def create(self, validated_data: Dict[str, Any]) -> Review:
         """
