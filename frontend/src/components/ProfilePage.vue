@@ -12,7 +12,7 @@
                 <div class="profile-sidebar">
                     <div class="profile-image-wrapper">
                         <img 
-                            :src="user.profile_image ? `${apiBaseUrl}${user.profile_image}` : defaultImage" 
+                            :src="getProfileImageUrl()" 
                             alt="Фото профиля" 
                             class="profile-image" 
                         />
@@ -113,6 +113,12 @@
                                 <div class="info-row">
                                     <div class="info-label">Электронная почта</div>
                                     <div class="info-value email">{{ user.email }}</div>
+                                </div>
+                                <div class="info-row" v-if="isYandexUser">
+                                    <div class="info-label">Аккаунт</div>
+                                    <div class="info-value social-account">
+                                        <span class="social-icon yandex">Я</span> Яндекс
+                                    </div>
                                 </div>
                             </div>
                             
@@ -352,6 +358,9 @@ const statistics = ref({
     favoritesCount: 0
 });
 
+const isYandexUser = ref(false);
+const yandexAvatarUrl = ref(localStorage.getItem('yandexAvatarUrl') || null);
+
 onMounted(async () => {
     // Проверяем URL-параметры для установки активной вкладки
     const tabParam = route.query.tab;
@@ -364,6 +373,7 @@ onMounted(async () => {
     await loadOrders();
     await loadFavorites();
     calculateStatistics();
+    checkYandexUser();
 });
 
 // Получение текущего пользователя
@@ -390,6 +400,10 @@ const loadUserProfile = async () => {
                 headers: { Authorization: `Bearer ${token}` }
             });
             user.value = response.data;
+            checkYandexUser();
+            
+            // Загружаем статистику
+            calculateStatistics();
         }
     } catch (error) {
         console.error('Ошибка загрузки профиля:', error);
@@ -800,6 +814,33 @@ const sendTestEmail = async (emailType) => {
         // Выводим сообщение об ошибке
         alert('Ошибка при отправке письма');
     }
+};
+
+// Проверяем, вошел ли пользователь через Яндекс
+const checkYandexUser = () => {
+    isYandexUser.value = !!localStorage.getItem('yandexAvatarUrl');
+};
+
+// Метод для получения URL изображения профиля с учетом аватара Яндекса
+const getProfileImageUrl = () => {
+    // Если есть изображение профиля на сервере
+    if (user.value && user.value.profile_image) {
+        return `${apiBaseUrl}${user.value.profile_image}`;
+    }
+    
+    // Если есть аватар Яндекса
+    if (yandexAvatarUrl.value) {
+        return yandexAvatarUrl.value;
+    }
+    
+    // Если есть сохраненный в localStorage URL аватара Яндекса
+    const storedYandexAvatar = localStorage.getItem('yandexAvatarUrl');
+    if (storedYandexAvatar) {
+        return storedYandexAvatar;
+    }
+    
+    // В противном случае возвращаем изображение по умолчанию
+    return defaultImage;
 };
 </script>
 
@@ -1702,5 +1743,26 @@ const sendTestEmail = async (emailType) => {
 .mailhog-info a {
     color: #6b46c1;
     text-decoration: underline;
+}
+
+.social-account {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.social-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    color: white;
+    font-weight: bold;
+}
+
+.social-icon.yandex {
+    background-color: #FF0000;
 }
 </style>

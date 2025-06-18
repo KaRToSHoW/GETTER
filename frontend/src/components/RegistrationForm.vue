@@ -3,7 +3,7 @@
         <div class="auth-container">
             <div class="auth-banner">
                 <div class="logo-container">
-                    <img src="https://via.placeholder.com/80" alt="Getter Logo" class="logo-image" />
+                    <img src="" alt="Getter Logo" class="logo-image" />
                     <h1 class="logo-text">GETTER</h1>
                 </div>
                 <p class="welcome-text">

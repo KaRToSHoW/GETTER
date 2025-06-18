@@ -106,64 +106,85 @@ const loadOrderFromServer = async () => {
       return;
     }
     
-    const response = await axios.get(`${API_BASE_URL}/main/orders/${orderId}/`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    
-    // Преобразуем данные с сервера в формат, совместимый с нашим компонентом
-    const orderData = response.data;
-    
-    // Теперь используем поля shipping_address или формируем адрес из отдельных полей
-    let address = '';
-    if (orderData.shipping_address) {
-      // Если есть готовый адрес, используем его
-      address = orderData.shipping_address;
+    // Если orderId содержит буквы (например ORD-...), считаем это номером заказа и ищем в списке заказов
+    if (typeof orderId === 'string' && orderId.includes('ORD-')) {
+      // Получаем список всех заказов пользователя
+      const ordersResponse = await axios.get(`${API_BASE_URL}/main/user/orders/`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Ищем заказ по номеру
+      const foundOrder = ordersResponse.data.orders.find(order => order.order_number === orderId);
+      
+      if (foundOrder) {
+        // Используем найденный заказ
+        processOrderData(foundOrder);
+      } else {
+        error.value = `Заказ с номером ${orderId} не найден`;
+      }
     } else {
-      // Иначе собираем из отдельных полей
-      const addressParts = [];
+      // Если это числовой ID, используем стандартный API для получения по ID
+      const response = await axios.get(`${API_BASE_URL}/main/orders/${orderId}/`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       
-      if (orderData.shipping_postal_code) {
-        addressParts.push(`индекс: ${orderData.shipping_postal_code}`);
-      }
-      
-      if (orderData.shipping_city) {
-        addressParts.push(`г. ${orderData.shipping_city}`);
-      }
-      
-      if (orderData.shipping_street) {
-        addressParts.push(`ул. ${orderData.shipping_street}`);
-      }
-      
-      if (orderData.shipping_house) {
-        addressParts.push(`д. ${orderData.shipping_house}`);
-      }
-      
-      if (orderData.shipping_apartment) {
-        addressParts.push(`кв. ${orderData.shipping_apartment}`);
-      }
-      
-      address = addressParts.join(', ');
+      processOrderData(response.data);
     }
-    
-    orderDetails.value = {
-      id: orderData.id,
-      order_number: orderData.order_number,
-      status: orderData.status,
-      address: address,
-      comment: orderData.shipping_comment || '',
-      items: orderData.items || [],
-      total: orderData.total_price,
-      deliveryPrice: 0, // Получаем из данных или устанавливаем по умолчанию
-      timestamp: orderData.created_at
-    };
-    
-    console.log('Данные заказа загружены с сервера:', orderDetails.value);
   } catch (e) {
     console.error('Ошибка при загрузке заказа с сервера:', e);
     error.value = 'Не удалось загрузить данные заказа';
   } finally {
     loading.value = false;
   }
+};
+
+// Функция для обработки данных заказа
+const processOrderData = (orderData) => {
+  // Теперь используем поля shipping_address или формируем адрес из отдельных полей
+  let address = '';
+  if (orderData.shipping_address) {
+    // Если есть готовый адрес, используем его
+    address = orderData.shipping_address;
+  } else {
+    // Иначе собираем из отдельных полей
+    const addressParts = [];
+    
+    if (orderData.shipping_postal_code) {
+      addressParts.push(`индекс: ${orderData.shipping_postal_code}`);
+    }
+    
+    if (orderData.shipping_city) {
+      addressParts.push(`г. ${orderData.shipping_city}`);
+    }
+    
+    if (orderData.shipping_street) {
+      addressParts.push(`ул. ${orderData.shipping_street}`);
+    }
+    
+    if (orderData.shipping_house) {
+      addressParts.push(`д. ${orderData.shipping_house}`);
+    }
+    
+    if (orderData.shipping_apartment) {
+      addressParts.push(`кв. ${orderData.shipping_apartment}`);
+    }
+    
+    address = addressParts.join(', ');
+  }
+  
+  orderDetails.value = {
+    id: orderData.id,
+    order_number: orderData.order_number,
+    status: orderData.status,
+    address: address,
+    comment: orderData.shipping_comment || '',
+    items: orderData.items || [],
+    total: orderData.total_price,
+    deliveryPrice: 0, // Получаем из данных или устанавливаем по умолчанию
+    timestamp: orderData.created_at
+  };
+  
+  console.log('Данные заказа загружены с сервера:', orderDetails.value);
 };
 
 // Основная функция загрузки деталей заказа

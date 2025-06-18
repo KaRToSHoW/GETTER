@@ -153,6 +153,7 @@ class Order(models.Model):
     objects = OrderManager()
     STATUS_CHOICES = [
         ('pending', 'В обработке'),
+        ('assembling', 'В сборке'),
         ('shipped', 'Отправлен'),
         ('delivered', 'Доставлен'),
         ('canceled', 'Отменен'),

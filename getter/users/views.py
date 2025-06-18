@@ -17,6 +17,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from typing import List, Dict, Any, Union, Optional, Type
 from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
+import requests
+from rest_framework_simplejwt.tokens import RefreshToken
 
 class UserViewSet(viewsets.ModelViewSet):
     """
@@ -179,3 +181,123 @@ def test_email(request: Request) -> Response:
     
     except Exception as e:
         return Response({'error': f'Ошибка при отправке письма: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+
+class YandexLoginView(APIView):
+    def post(self, request):
+        token = request.data.get('token')
+        if not token:
+            return Response({'error': 'Missing token'}, status=400)
+
+        yandex_response = requests.get(
+            'https://login.yandex.ru/info',
+            headers={'Authorization': f'OAuth {token}'}
+        )
+
+        if yandex_response.status_code != 200:
+            return Response({'error': 'Invalid token'}, status=400)
+
+        data = yandex_response.json()
+        email = data.get('default_email')
+        login = data.get('login')
+        first_name = data.get('first_name')
+        last_name = data.get('last_name')
+        display_name = data.get('display_name')
+        avatar_id = data.get('default_avatar_id')
+        
+        # Формируем URL аватара Яндекса, если он есть
+        avatar_url = None
+        if avatar_id and not data.get('is_avatar_empty', True):
+            avatar_url = f"https://avatars.yandex.net/get-yapic/{avatar_id}/islands-200"
+        
+        # Для отладки выводим полученные данные
+        print(f"Yandex data: {data}")
+        if avatar_url:
+            print(f"Avatar URL: {avatar_url}")
+
+        if not email:
+            return Response({'error': 'Email not provided'}, status=400)
+
+        # Проверяем, существует ли пользователь с таким email
+        user_exists = User.objects.filter(email=email).exists()
+        
+        if user_exists:
+            user = User.objects.get(email=email)
+            # Обновляем данные пользователя, если они изменились
+            if first_name and user.first_name != first_name:
+                user.first_name = first_name
+            if last_name and user.last_name != last_name:
+                user.last_name = last_name
+            
+            # Если у пользователя нет аватара и есть аватар Яндекса, загружаем его
+            if avatar_url and not user.profile_image:
+                try:
+                    # Загружаем изображение с Яндекса
+                    avatar_response = requests.get(avatar_url)
+                    if avatar_response.status_code == 200:
+                        from django.core.files.base import ContentFile
+                        from io import BytesIO
+                        import uuid
+                        
+                        # Генерируем уникальное имя файла
+                        file_name = f"yandex_avatar_{uuid.uuid4()}.jpg"
+                        
+                        # Сохраняем изображение в профиль пользователя
+                        user.profile_image.save(
+                            file_name,
+                            ContentFile(avatar_response.content),
+                            save=True
+                        )
+                        print(f"Avatar saved for user {user.username}")
+                except Exception as e:
+                    print(f"Error saving avatar: {str(e)}")
+            
+            user.save()
+        else:
+            # Создаем нового пользователя с данными из Яндекса
+            user = User.objects.create_user(
+                username=login,
+                email=email,
+                password=None,  # Пароль не нужен для OAuth авторизации
+                first_name=first_name or '',
+                last_name=last_name or ''
+            )
+            
+            # Если есть аватар Яндекса, загружаем его для нового пользователя
+            if avatar_url:
+                try:
+                    # Загружаем изображение с Яндекса
+                    avatar_response = requests.get(avatar_url)
+                    if avatar_response.status_code == 200:
+                        from django.core.files.base import ContentFile
+                        from io import BytesIO
+                        import uuid
+                        
+                        # Генерируем уникальное имя файла
+                        file_name = f"yandex_avatar_{uuid.uuid4()}.jpg"
+                        
+                        # Сохраняем изображение в профиль пользователя
+                        user.profile_image.save(
+                            file_name,
+                            ContentFile(avatar_response.content),
+                            save=True
+                        )
+                        print(f"Avatar saved for new user {user.username}")
+                except Exception as e:
+                    print(f"Error saving avatar for new user: {str(e)}")
+
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'token': str(refresh.access_token),
+            'refresh': str(refresh),
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'is_superuser': user.is_superuser,
+                'profile_image': user.get_profile_image_url() if hasattr(user, 'get_profile_image_url') else None,
+                'yandex_avatar_url': avatar_url
+            }
+        })

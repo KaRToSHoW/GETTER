@@ -432,8 +432,9 @@ def create_order(request):
     try:
         print("=== Начало создания заказа ===")
         print(f"Пользователь: {request.user.username} (ID: {request.user.id})")
+        print(f"Полученные данные: {request.data}")
         
-        # Проверяем, есть ли у пользователя несколько корзин
+        # Проверяем, есть ли у пользователя корзина (заказ со статусом pending)
         pending_orders = Order.objects.filter(user=request.user, status='pending')
         print(f"Найдено корзин: {pending_orders.count()}")
         
@@ -461,56 +462,69 @@ def create_order(request):
         print("Получение данных доставки из запроса:")
         shipping_data = request.data.get('shipping', {})
         
-        # Обновляем заказ данными для валидации
-        order_data = {
-            'status': 'assembling',
-            'shipping_city': shipping_data.get('city'),
-            'shipping_street': shipping_data.get('street'),
-            'shipping_house': shipping_data.get('house'),
-            'shipping_apartment': shipping_data.get('apartment'),
-            'shipping_postal_code': shipping_data.get('postal_code'),
-            'shipping_comment': shipping_data.get('comment'),
-        }
+        # Получаем итоговую цену заказа из запроса или вычисляем из корзины
+        total_price = request.data.get('total_price')
+        if total_price is not None:
+            try:
+                total_price = float(total_price)
+                print(f"Получена цена заказа из запроса: {total_price}")
+            except (ValueError, TypeError):
+                total_price = float(cart.calculate_total_price())
+                print(f"Ошибка при преобразовании цены из запроса, используем вычисленную: {total_price}")
+        else:
+            total_price = float(cart.calculate_total_price())
+            print(f"Цена заказа не указана в запросе, используем вычисленную: {total_price}")
         
-        # Валидируем и обновляем заказ через сериализатор
-        serializer = OrderSerializer(cart, data=order_data, partial=True, context={'request': request})
-        if not serializer.is_valid():
-            print(f"Ошибки валидации: {serializer.errors}")
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # Создаем новый заказ со статусом assembling вместо изменения корзины
+        new_order = Order.objects.create(
+            user=request.user,
+            status='assembling',
+            shipping_city=request.data.get('shipping_city') or shipping_data.get('city'),
+            shipping_street=request.data.get('shipping_street') or shipping_data.get('street'),
+            shipping_house=request.data.get('shipping_house') or shipping_data.get('house'),
+            shipping_apartment=request.data.get('shipping_apartment') or shipping_data.get('apartment'),
+            shipping_postal_code=request.data.get('shipping_postal_code') or shipping_data.get('postal_code'),
+            shipping_comment=request.data.get('shipping_comment') or shipping_data.get('comment'),
+            total_price=total_price
+        )
         
-        # Если валидация прошла, обновляем заказ
-        serializer.save()
+        # Генерируем номер заказа
+        timestamp = timezone.now().strftime('%Y%m%d%H%M')
+        random_suffix = ''.join([str(random.randint(0, 9)) for _ in range(4)])
+        new_order.order_number = f"ORD-{timestamp}-{random_suffix}"
+        new_order.save(update_fields=['order_number'])
+        print(f"Сгенерирован номер заказа: {new_order.order_number}")
         
-        # Генерируем номер заказа, если его нет
-        if not cart.order_number:
-            # Генерируем уникальный номер заказа
-            timestamp = timezone.now().strftime('%Y%m%d%H%M')
-            random_suffix = ''.join([str(random.randint(0, 9)) for _ in range(4)])
-            cart.order_number = f"ORD-{timestamp}-{random_suffix}"
-            print(f"Сгенерирован номер заказа: {cart.order_number}")
-            cart.save(update_fields=['order_number'])
-        
-        # Обновляем количество товаров на складе
-        for item in cart.items.all():
-            product = item.product
-            product.stock -= item.quantity
+        # Копируем товары из корзины в новый заказ
+        for cart_item in cart.items.all():
+            # Создаем новый OrderItem для нового заказа
+            OrderItem.objects.create(
+                order=new_order,
+                product=cart_item.product,
+                quantity=cart_item.quantity
+            )
+            
+            # Уменьшаем количество товара на складе
+            product = cart_item.product
+            product.stock -= cart_item.quantity
             product.save(update_fields=['stock'])
-            print(f"Уменьшено количество товара '{product.name}' на складе на {item.quantity}. Остаток: {product.stock}")
+            print(f"Уменьшено количество товара '{product.name}' на складе на {cart_item.quantity}. Остаток: {product.stock}")
         
-        # Создаем новую пустую корзину для пользователя
-        try:
-            new_cart = Order.objects.create(user=request.user, status='pending')
-            print(f"Создана новая пустая корзина с ID: {new_cart.id}")
-        except Exception as cart_error:
-            print(f"Ошибка при создании новой корзины: {str(cart_error)}")
-            # Не прерываем выполнение, это некритичная ошибка
+        # Очищаем корзину (удаляем все товары)
+        cart.items.all().delete()
+        print(f"Корзина очищена")
+        
+        # Принудительно пересчитываем и обновляем total_price
+        new_order.total_price = new_order.calculate_total_price()
+        new_order.save(update_fields=['total_price'])
+        print(f"Обновлена итоговая цена заказа: {new_order.total_price}")
         
         response_data = {
             'message': 'Заказ успешно создан',
-            'order_id': cart.id,
-            'order_number': cart.order_number,
-            'total_price': float(cart.total_price),
-            'shipping_address': cart.get_shipping_address()
+            'order_id': new_order.id,
+            'order_number': new_order.order_number,
+            'total_price': float(new_order.total_price),
+            'shipping_address': new_order.get_shipping_address()
         }
         print("=== Заказ успешно создан ===")
         return Response(response_data, status=status.HTTP_201_CREATED)
@@ -592,6 +606,12 @@ def user_orders(request):
                 'total_price': float(order.total_price),
                 'items': order_items,
                 'shipping_address': order.get_shipping_address(),
+                'shipping_city': order.shipping_city,
+                'shipping_street': order.shipping_street,
+                'shipping_house': order.shipping_house,
+                'shipping_apartment': order.shipping_apartment,
+                'shipping_postal_code': order.shipping_postal_code,
+                'shipping_comment': order.shipping_comment
             }
             
             # Добавляем информацию о пользователе для админа
@@ -602,6 +622,8 @@ def user_orders(request):
             
             orders_data.append(order_data)
         
+        print(f"Найдено заказов для пользователя {request.user.id}: {len(orders_data)}")
+        
         return Response({
             'orders': orders_data,
             'pending_orders': OrderSerializer(pending_orders, many=True).data,
@@ -610,6 +632,7 @@ def user_orders(request):
             'total_spent': float(total_spent)
         })
     except Exception as e:
+        print(f"Ошибка при получении заказов: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])

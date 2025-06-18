@@ -324,7 +324,7 @@ const loadSavedAddress = async () => {
     if (!token) return;
     
     // Получаем список заказов пользователя
-    const response = await axios.get(`${API_BASE_URL}/main/user-orders/`, {
+    const response = await axios.get(`${API_BASE_URL}/main/user/orders/`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     
@@ -376,32 +376,25 @@ const submitOrder = async () => {
   try {
     const token = localStorage.getItem('token');
     
-    // Сохраняем данные заказа в sessionStorage для отображения на странице успешного заказа
-    sessionStorage.setItem('lastOrderDetails', JSON.stringify({
-      address: `${addressData.value.postalCode}, г. ${addressData.value.city}, ул. ${addressData.value.street}, д. ${addressData.value.house}${addressData.value.apartment ? ', кв. ' + addressData.value.apartment : ''}`,
-      items: cartItems.value,
-      total: Number(cartTotal.value),
-      deliveryPrice: deliveryPrice.value,
-      comment: addressData.value.comment || '',
-      timestamp: new Date().toISOString()
-    }));
-    
     // Создаем объект для отправки с правильными полями доставки
     const orderData = {
-      shipping: {
-        city: addressData.value.city,
-        street: addressData.value.street,
-        house: addressData.value.house,
-        apartment: addressData.value.apartment,
-        postal_code: addressData.value.postalCode,
-        comment: addressData.value.comment || ''
-      },
-      total_price: Number(cartTotal.value),
-      delivery_price: deliveryPrice.value
+      shipping_city: addressData.value.city,
+      shipping_street: addressData.value.street,
+      shipping_house: addressData.value.house,
+      shipping_apartment: addressData.value.apartment,
+      shipping_postal_code: addressData.value.postalCode,
+      shipping_comment: addressData.value.comment || '',
+      total_price: parseFloat(cartTotal.value) + deliveryPrice.value
     };
     
+    console.log('Отправляемые данные заказа:', orderData);
+    console.log('Общая стоимость заказа:', orderData.total_price);
+    
     const response = await axios.post(`${API_BASE_URL}/main/orders/create/`, orderData, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
     });
     
     toast.value?.showToast('Заказ успешно оформлен!', 'success');
@@ -409,8 +402,28 @@ const submitOrder = async () => {
     // Перенаправляем на страницу успешного оформления заказа
     console.log('Данные созданного заказа:', response.data);
     
+    // Создаем объект с деталями заказа для sessionStorage
+    const orderDetails = {
+      id: response.data.order_id,
+      order_number: response.data.order_number,
+      status: 'assembling',
+      address: response.data.shipping_address || formatAddress(orderData),
+      comment: orderData.shipping_comment || '',
+      items: cartItems.value.map(item => ({
+        id: item.id,
+        product: item.product,
+        quantity: item.quantity
+      })),
+      total: parseFloat(cartTotal.value),
+      deliveryPrice: deliveryPrice.value,
+      timestamp: new Date().toISOString()
+    };
+    
+    // Сохраняем детали заказа в sessionStorage для использования на странице успеха
+    sessionStorage.setItem('lastOrderDetails', JSON.stringify(orderDetails));
+    
     // Используем order_number из ответа API
-    const orderId = response.data.order_number || response.data.id || 'успешно';
+    const orderId = response.data.order_number || response.data.order_id || 'успешно';
     
     router.push({
       name: 'order-success',
@@ -419,10 +432,42 @@ const submitOrder = async () => {
     
   } catch (err) {
     console.error('Ошибка при оформлении заказа:', err);
-    toast.value?.showToast('Ошибка при оформлении заказа: ' + (err.response?.data?.detail || err.message), 'error');
+    if (err.response && err.response.data) {
+      console.error('Детали ошибки:', err.response.data);
+      toast.value?.showToast('Ошибка при оформлении заказа: ' + JSON.stringify(err.response.data), 'error');
+    } else {
+      toast.value?.showToast('Ошибка при оформлении заказа: ' + err.message, 'error');
+    }
   } finally {
     isSubmitting.value = false;
   }
+};
+
+// Функция для форматирования адреса доставки
+const formatAddress = (addressData) => {
+  const addressParts = [];
+  
+  if (addressData.shipping_postal_code) {
+    addressParts.push(`индекс: ${addressData.shipping_postal_code}`);
+  }
+  
+  if (addressData.shipping_city) {
+    addressParts.push(`г. ${addressData.shipping_city}`);
+  }
+  
+  if (addressData.shipping_street) {
+    addressParts.push(`ул. ${addressData.shipping_street}`);
+  }
+  
+  if (addressData.shipping_house) {
+    addressParts.push(`д. ${addressData.shipping_house}`);
+  }
+  
+  if (addressData.shipping_apartment) {
+    addressParts.push(`кв. ${addressData.shipping_apartment}`);
+  }
+  
+  return addressParts.join(', ');
 };
 </script>
 

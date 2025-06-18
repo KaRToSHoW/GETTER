@@ -142,6 +142,10 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
+MIDDLEWARE = ['corsheaders.middleware.CorsMiddleware'] + MIDDLEWARE
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8080",
+]
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
 

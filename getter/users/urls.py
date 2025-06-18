@@ -10,7 +10,7 @@ URL конфигурация для приложения users.
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import UserViewSet
+from .views import UserViewSet, YandexLoginView
 from . import views
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -32,6 +32,7 @@ urlpatterns = [
     
     # Email testing
     path('test-email/', views.test_email, name='test-email'),
+    path('api/yandex-login/', YandexLoginView.as_view()),
 ]
 
 

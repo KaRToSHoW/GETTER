@@ -4,8 +4,8 @@
         <div class="auth-container">
             <div class="auth-banner">
                 <div class="logo-container">
-                <img src="https://via.placeholder.com/80" alt="Getter Logo" class="logo-image" />
-                <h1 class="logo-text">GETTER</h1>
+                    <img src="https://via.placeholder.com/80" alt="Getter Logo" class="logo-image" />
+                    <h1 class="logo-text">GETTER</h1>
                 </div>
                 <p class="welcome-text">
                     С возвращением в GETTER!<br />
@@ -17,57 +17,45 @@
                     Доверьтесь профессионалам в мире электроники!
                 </p>
             </div>
-            
+
             <div class="auth-form-container">
                 <div class="auth-form-wrapper">
                     <h2 class="auth-title">Вход в аккаунт</h2>
                     <p class="auth-subtitle">Введите свои данные для входа</p>
-                    
+
                     <form @submit.prevent="handleLogin" class="auth-form">
                         <div class="form-group">
                             <label for="username">Почта</label>
                             <div class="input-wrapper">
                                 <span class="input-icon">✉️</span>
-                                <input 
-                                    type="text" 
-                                    id="username" 
-                                    v-model="username" 
-                                    required 
-                                    placeholder="Ваш email"
-                                    class="form-input"
-                                >
-            </div>
-        </div>
-                        
-                <div class="form-group">
+                                <input type="text" id="username" v-model="username" required placeholder="Ваш email"
+                                    class="form-input">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
                             <label for="password">Пароль</label>
                             <div class="input-wrapper">
                                 <span class="input-icon">🔒</span>
-                                <input 
-                                    type="password" 
-                                    id="password" 
-                                    v-model="password" 
-                                    required 
-                                    placeholder="Ваш пароль"
-                                    class="form-input"
-                                >
+                                <input type="password" id="password" v-model="password" required
+                                    placeholder="Ваш пароль" class="form-input">
                             </div>
-                </div>
-                        
+                        </div>
+
                         <div class="auth-options">
                             <label class="remember-me">
                                 <input type="checkbox"> Запомнить меня
                             </label>
                             <a href="#" class="forgot-password">Забыли пароль?</a>
-                </div>
-                        
+                        </div>
+
                         <button type="submit" class="auth-button">Войти</button>
-            </form>
-                    
+                    </form>
+
                     <div class="divider">
                         <span class="divider-text">или</span>
                     </div>
-                    
+
                     <div class="social-auth">
                         <button class="social-button google">
                             <img src="https://via.placeholder.com/24" alt="Google" />
@@ -77,12 +65,19 @@
                             <img src="https://via.placeholder.com/24" alt="VK" />
                             <span>Войти через VK</span>
                         </button>
+                        <div id="yandex-login"></div>
                     </div>
-                    
+
                     <p class="auth-redirect">
                         Нет аккаунта? <router-link to="/register">Зарегистрируйтесь</router-link>
                     </p>
-                    
+
+                    <!-- Отображение данных от Яндекса для отладки -->
+                    <div v-if="yandexResponse" class="debug-container">
+                        <h3>Данные от Яндекса:</h3>
+                        <pre>{{ JSON.stringify(yandexResponse, null, 2) }}</pre>
+                    </div>
+
                     <!-- Кнопка для тестирования Hawk -->
                     <div v-if="isDevelopment" class="hawk-test-container">
                         <button @click.prevent="sendTestErrorToHawk" class="hawk-test-button">
@@ -97,7 +92,7 @@
 </template>
 
 <script setup>
-import { ref, inject } from 'vue';
+import { ref, inject, onMounted } from 'vue';
 import axios from 'axios';
 import { useRouter } from 'vue-router';
 import ToastNotification from './ToastNotification.vue';
@@ -109,30 +104,143 @@ const router = useRouter();
 const toast = ref(null);
 const $hawk = inject('$hawk', null); // Получаем экземпляр Hawk из глобальных свойств
 const isDevelopment = ref(process.env.NODE_ENV === 'development'); // Определяем, находимся ли в режиме разработки
+const yandexResponse = ref(null); // Для хранения и отображения ответа от Яндекса
 
+onMounted(() => {
+    // Инициализация кнопки Яндекс Паспорта
+    if (window.YaAuthSuggest) {
+        window.YaAuthSuggest.init({
+            client_id: '697254e3c24d4ad28a04c7b3ea9c5362',
+            response_type: 'token',
+            redirect_uri: 'http://localhost:8080/auth/yandex/callback'
+        }, 'http://localhost:8080', {
+            view: 'button',
+            parentId: 'yandex-login',
+            buttonTheme: 'light',
+            buttonSize: 'm',
+            buttonBorderRadius: 8
+        }).then(({ handler }) => {
+            handler({
+                onSuccess: (data) => {
+                    console.log('Yandex token:', data.access_token);
+                    // Отправляем access_token на Django
+                    handleYandexLogin(data.access_token);
+                },
+                onError: (error) => {
+                    console.error('Yandex login error', error);
+                    toast.value.showToast('Ошибка при входе через Яндекс', 'error');
+                }
+            });
+        }).catch(error => {
+            console.error('Ошибка инициализации Яндекс.Паспорта:', error);
+        });
+    } else {
+        console.error('YaAuthSuggest не найден. Убедитесь, что скрипт Яндекс.Паспорта загружен.');
+    }
+
+    // Проверяем наличие токена Яндекс в localStorage
+    const yandexToken = localStorage.getItem('yandex_token');
+    if (yandexToken) {
+        // Если токен есть, отправляем его на сервер
+        handleYandexLogin(yandexToken);
+        // Удаляем токен из localStorage, чтобы не повторять процесс при следующей загрузке
+        localStorage.removeItem('yandex_token');
+    }
+});
+
+// Функция для обработки входа через Яндекс
+const handleYandexLogin = (token) => {
+                // Отправляем access_token на Django
+    axios.post('http://127.0.0.1:8000/users/api/yandex-login/', {
+        token: token
+    })
+    .then(response => {
+        console.log('Ответ от Django после авторизации через Яндекс:', response.data);
+        
+        // Сохраняем токены
+        localStorage.setItem('token', response.data.token);
+        if (response.data.refresh) {
+            localStorage.setItem('refreshToken', response.data.refresh);
+        }
+        
+        // Сохраняем данные пользователя
+        if (response.data.user) {
+            localStorage.setItem('username', response.data.user.username);
+            localStorage.setItem('userId', response.data.user.id);
+            localStorage.setItem('userEmail', response.data.user.email);
+            localStorage.setItem('userFirstName', response.data.user.first_name);
+            localStorage.setItem('userLastName', response.data.user.last_name);
+            
+            // Сохраняем URL изображения профиля
+            if (response.data.user.profile_image) {
+                localStorage.setItem('userProfileImage', response.data.user.profile_image);
+            }
+            
+            // Сохраняем URL аватара Яндекса как резервный вариант
+            if (response.data.user.yandex_avatar_url) {
+                localStorage.setItem('yandexAvatarUrl', response.data.user.yandex_avatar_url);
+            }
+            
+            // Если пользователь администратор, сохраняем эту информацию
+            if (response.data.user.is_superuser) {
+                localStorage.setItem('isAdmin', 'true');
+            }
+        }
+        
+        // Устанавливаем заголовок для будущих запросов
+        axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+        
+        // Обновляем состояние авторизации
+        isAuthenticated.value = true;
+        
+        // Показываем сообщение об успехе
+        toast.value.showToast('Успешный вход через Яндекс!', 'success');
+        
+        // Перенаправление на профиль
+        router.push('/profile');
+    })
+    .catch(error => {
+        console.error('Ошибка при обработке Яндекс входа:', error);
+        if (error.response) {
+            console.error('Ответ сервера:', error.response.data);
+        }
+        toast.value.showToast('Ошибка при входе через Яндекс', 'error');
+        
+        // Отправляем информацию об ошибке в Hawk
+        if ($hawk) {
+            $hawk.send(error, {
+                errorContext: 'Ошибка авторизации через Яндекс',
+                location: 'LoginForm.vue',
+                date: new Date().toISOString()
+            });
+        }
+    });
+};
+
+// Функция для входа через логин/пароль
 const handleLogin = async () => {
     try {
         const response = await axios.post('http://127.0.0.1:8000/users/api/token/', {
             username: username.value,
             password: password.value
         });
-        
+
         // Проверяем наличие токенов в ответе
         if (response.data.access && response.data.refresh) {
             // Сохраняем токены
-        localStorage.setItem('token', response.data.access);
+            localStorage.setItem('token', response.data.access);
             localStorage.setItem('refreshToken', response.data.refresh); // Используем единый формат имен
-        localStorage.setItem('username', username.value);
-            
+            localStorage.setItem('username', username.value);
+
             // Устанавливаем заголовок по умолчанию для всех будущих запросов
             axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.access}`;
-            
+
             // Обновляем состояние авторизации
             isAuthenticated.value = true;
-            
+
             // Показываем сообщение об успехе
-        toast.value.showToast('Успешный вход в систему!', 'success');
-            
+            toast.value.showToast('Успешный вход в систему!', 'success');
+
             // Перенаправление на профиль
             router.push('/profile');
         } else {
@@ -140,7 +248,7 @@ const handleLogin = async () => {
         }
     } catch (error) {
         console.error('Ошибка входа:', error);
-        
+
         // Отправляем информацию об ошибке в Hawk
         if ($hawk) {
             $hawk.send(error, {
@@ -150,9 +258,9 @@ const handleLogin = async () => {
                 date: new Date().toISOString()
             });
         }
-        
+
         let errorMessage = 'Ошибка входа: ';
-        
+
         // Обрабатываем разные типы ошибок
         if (error.response) {
             // Сервер ответил со статусом, отличным от 2xx
@@ -170,7 +278,7 @@ const handleLogin = async () => {
             // Ошибка при настройке запроса
             errorMessage += error.message || 'Неизвестная ошибка';
         }
-        
+
         toast.value.showToast(errorMessage, 'error');
     }
 };
@@ -181,7 +289,7 @@ const sendTestErrorToHawk = () => {
         // Создаем информативную тестовую ошибку
         const testError = new Error('Тестовая ошибка из LoginForm');
         testError.name = 'HawkTestError';
-        
+
         const testContext = {
             type: 'manual_test',
             message: 'Тестовая ошибка для проверки работы Hawk',
@@ -193,14 +301,14 @@ const sendTestErrorToHawk = () => {
                 platform: navigator.platform
             }
         };
-        
+
         // Отправка события в Hawk
         $hawk.send(testError, testContext);
-        
+
         // Подтверждение для пользователя
         console.log('[Hawk Test] ✅ Тестовая ошибка отправлена', testContext);
         toast.value.showToast('Ошибка успешно отправлена в Hawk', 'success');
-        
+
         // Показываем сообщение о предупреждениях в консоли
         if (process.env.NODE_ENV === 'development') {
             setTimeout(() => {
@@ -436,6 +544,16 @@ const sendTestErrorToHawk = () => {
     color: #4a76a8;
 }
 
+.social-button.yandex {
+    color: #FF0000;
+    background-color: #FFFFFF;
+    border: 1px solid #FF0000;
+}
+
+.social-button.yandex:hover {
+    background-color: #FFEEEE;
+}
+
 .auth-redirect {
     text-align: center;
     font-size: 14px;
@@ -486,21 +604,52 @@ const sendTestErrorToHawk = () => {
     font-size: 12px;
 }
 
+/* Стили для отображения отладочной информации */
+.debug-container {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: auto;
+}
+
+.debug-container h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 16px;
+    color: #4a5568;
+}
+
+.debug-container pre {
+    font-family: monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: #334155;
+    margin: 0;
+    padding: 10px;
+    background-color: #f1f5f9;
+    border-radius: 4px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
 /* Адаптивность */
 @media (max-width: 768px) {
     .auth-container {
         flex-direction: column;
         max-width: 500px;
     }
-    
+
     .auth-banner {
         padding: 30px;
     }
-    
+
     .welcome-text {
         display: none;
     }
-    
+
     .logo-container {
         margin-bottom: 0;
     }
@@ -510,11 +659,11 @@ const sendTestErrorToHawk = () => {
     .auth-banner {
         padding: 20px;
     }
-    
+
     .auth-form-container {
         padding: 20px;
     }
-    
+
     .auth-options {
         flex-direction: column;
         align-items: flex-start;
