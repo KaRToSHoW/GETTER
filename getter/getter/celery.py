@@ -12,6 +12,14 @@ app = Celery('getter')
 # Загрузка конфигурации из настроек Django
 app.config_from_object('django.conf:settings', namespace='CELERY')
 
+# Настройка событий для мониторинга
+app.conf.update(
+    task_send_sent_event=True,  # Отправлять события при отправке задачи
+    worker_send_task_events=True,  # Отправлять события от воркера
+    task_track_started=True,  # Отслеживать начало выполнения задачи
+    worker_log_color=False,  # Отключить цвета в логах для лучшей совместимости с Windows
+)
+
 # Автоматическое обнаружение и регистрация задач из всех приложений Django
 app.autodiscover_tasks(lambda: settings.INSTALLED_APPS)
 

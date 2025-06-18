@@ -49,10 +49,9 @@ Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$projectPath'
 # Даем beat время на запуск
 Start-Sleep -Seconds 3
 
-# Запускаем Flower на другом порту (5556)
+# Запускаем Flower с новым скриптом
 Write-Output "Запуск Flower..."
-$env:DJANGO_SETTINGS_MODULE = "getter.settings"
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$projectPath'; celery -A getter --broker=redis://localhost:6379/0 flower --port=5556"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$projectPath'; .\run_flower.ps1"
 
 # Даем Flower время на запуск
 Start-Sleep -Seconds 3

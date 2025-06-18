@@ -10,7 +10,7 @@ from typing import Dict, List, Any, Optional
 logger = logging.getLogger(__name__)
 
 @shared_task
-def send_inactive_users_reminder() -> Dict[str, int]:
+def send_inactive_users_reminder(*args, **kwargs) -> Dict[str, int]:
     """
     Периодическая задача для отправки напоминаний неактивным пользователям.
     Отправляет email пользователям, которые не входили в систему более 30 дней.
@@ -47,7 +47,7 @@ def send_inactive_users_reminder() -> Dict[str, int]:
     return {'sent_reminders': sent_count}
 
 @shared_task
-def cleanup_inactive_accounts() -> Dict[str, int]:
+def cleanup_inactive_accounts(*args, **kwargs) -> Dict[str, int]:
     """
     Периодическая задача для деактивации учетных записей пользователей,
     которые не входили в систему более 365 дней.
@@ -71,7 +71,7 @@ def cleanup_inactive_accounts() -> Dict[str, int]:
     return {'deactivated_accounts': deactivated}
 
 @shared_task
-def user_activity_report() -> Dict[str, Any]:
+def user_activity_report(*args, **kwargs) -> Dict[str, Any]:
     """
     Периодическая задача для генерации отчета об активности пользователей.
     

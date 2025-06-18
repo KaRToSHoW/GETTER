@@ -10,7 +10,7 @@ from typing import Dict, List, Any, Optional, Union
 logger = logging.getLogger(__name__)
 
 @shared_task
-def update_product_availability() -> Dict[str, int]:
+def update_product_availability(*args, **kwargs) -> Dict[str, int]:
     """
     Периодическая задача для обновления доступности товаров.
     Товары с нулевым количеством помечаются как недоступные.
@@ -79,7 +79,7 @@ def generate_daily_sales_report() -> Dict[str, Any]:
     return report
 
 @shared_task
-def update_order_statuses() -> Dict[str, int]:
+def update_order_statuses(*args, **kwargs) -> Dict[str, int]:
     """
     Периодическая задача для автоматического обновления статусов заказов
     на основе времени их создания/обновления.
@@ -129,20 +129,30 @@ def calculate_product_ratings() -> Dict[str, int]:
     }
 
 @shared_task
-def clean_old_reviews() -> Dict[str, int]:
+def clean_old_reviews(*args, **kwargs) -> Dict[str, int]:
     """
-    Периодическая задача для удаления старых отзывов без текста.
+    Периодическая задача для удаления отзывов без текста или с некорректными комментариями.
     
     Returns:
         Словарь с количеством удаленных отзывов
     """
-    # Удаляем отзывы старше 1 года без комментария
-    threshold_date = timezone.now() - timezone.timedelta(days=365)
-    deleted, _ = Review.objects.filter(
-        created_at__lt=threshold_date,
+    # Удаляем отзывы без комментария
+    deleted_empty, _ = Review.objects.filter(
         comment__isnull=True
     ).delete()
     
-    logger.info(f"Удалено {deleted} старых отзывов без текста")
+    # Для удаления отзывов с некорректными комментариями, содержащими <generator object>,
+    # нужно проверить каждый отзыв индивидуально, так как Django ORM не поддерживает поиск по таким строкам
+    deleted_invalid = 0
+    reviews = Review.objects.all()
+    for review in reviews:
+        comment_str = str(review.comment)
+        if "<generator object" in comment_str:
+            review.delete()
+            deleted_invalid += 1
     
-    return {'deleted_reviews': deleted} 
+    total_deleted = deleted_empty + deleted_invalid
+    
+    logger.info(f"Удалено {deleted_empty} отзывов без текста и {deleted_invalid} отзывов с некорректными комментариями")
+    
+    return {'deleted_reviews': total_deleted} 
