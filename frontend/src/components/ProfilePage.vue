@@ -104,20 +104,21 @@
                             <div v-if="!isEditing" class="profile-info">
                                 <div class="info-row">
                                     <div class="info-label">Имя</div>
-                                    <div class="info-value">{{ user.first_name || '—' }} {{ user.last_name || '—' }}</div>
+                                    <div class="info-value">{{ user && user.first_name ? user.first_name : '—' }} {{ user && user.last_name ? user.last_name : '—' }}</div>
                                 </div>
                                 <div class="info-row">
                                     <div class="info-label">Имя пользователя</div>
-                                    <div class="info-value">{{ user.username }}</div>
+                                    <div class="info-value">{{ user && user.username ? user.username : '—' }}</div>
                                 </div>
                                 <div class="info-row">
                                     <div class="info-label">Электронная почта</div>
-                                    <div class="info-value email">{{ user.email }}</div>
+                                    <div class="info-value email">{{ user && user.email ? user.email : '—' }}</div>
                                 </div>
                                 <div class="info-row" v-if="isYandexUser">
                                     <div class="info-label">Аккаунт</div>
                                     <div class="info-value social-account">
-                                        <span class="social-icon yandex">Я</span> Яндекс
+                                        <span class="social-icon yandex">Я</span> Яндекс 
+                                        <span class="social-badge">подключен</span>
                                     </div>
                                 </div>
                             </div>
@@ -305,13 +306,13 @@
             <div class="email-testing-section" >
                 <h3>Тестирование отправки писем</h3>
                 <div class="email-testing-info">
-                    <p>Текущий email для тестирования: <strong>{{ user.email || 'Не указан' }}</strong></p>
-                    <div v-if="!user.email" class="email-warning">
+                    <p>Текущий email для тестирования: <strong>{{ user && user.email ? user.email : 'Не указан' }}</strong></p>
+                    <div v-if="!user || !user.email" class="email-warning">
                         Внимание: у вас не указан email адрес. Для тестирования отправки писем необходимо указать email.
                     </div>
                 </div>
 
-                <div class="email-testing-buttons" v-if="user.email">
+                <div class="email-testing-buttons" v-if="user && user.email">
                     <button @click="sendTestEmail('welcome')" class="email-test-btn">
                         Отправить приветственное письмо
                     </button>
@@ -524,7 +525,7 @@ const loadFavorites = async () => {
                     id: product.id,
                     name: product.name,
                     price: parseFloat(product.price),
-                    image: product.image ? `${apiBaseUrl}${product.image}` : 'https://via.placeholder.com/100',
+                    image: product.image ? `${apiBaseUrl}${product.image}` : require('@/assets/img/product_placeholder.svg'),
                     discounted_price: product.get_discounted_price ? parseFloat(product.get_discounted_price) : parseFloat(product.price)
                 }));
             } else {
@@ -540,10 +541,11 @@ const loadFavorites = async () => {
 
 // Загрузка тестовых данных избранного
 const loadFallbackFavorites = () => {
+    const productImage = require('@/assets/img/product_placeholder.svg');
     favorites.value = [
-        { id: 101, name: 'Смартфон iPhone 14 Pro', price: 89990, image: 'https://via.placeholder.com/100' },
-        { id: 102, name: 'Наушники Sony WH-1000XM4', price: 27990, image: 'https://via.placeholder.com/100' },
-        { id: 103, name: 'Умные часы Apple Watch Series 8', price: 36990, image: 'https://via.placeholder.com/100' }
+        { id: 101, name: 'Смартфон iPhone 14 Pro', price: 89990, image: productImage },
+        { id: 102, name: 'Наушники Sony WH-1000XM4', price: 27990, image: productImage },
+        { id: 103, name: 'Умные часы Apple Watch Series 8', price: 36990, image: productImage }
     ];
 };
 
@@ -782,6 +784,11 @@ const calculateItemPrice = (item) => {
 };
 
 const sendTestEmail = async (emailType) => {
+    if (!user.value || !user.value.email) {
+        alert('Не указан email адрес для отправки тестового письма');
+        return;
+    }
+
     try {
         const response = await axios.post(
             'http://127.0.0.1:8000/users/test-email/',
@@ -790,10 +797,10 @@ const sendTestEmail = async (emailType) => {
         );
         
         // Используем Hawk для отслеживания успешной отправки
-        if (currentUser.value.hawk) {
+        if (currentUser.value && currentUser.value.hawk) {
             currentUser.value.hawk.sendMessage('Письмо успешно отправлено', 'success', {
                 type: emailType,
-                email: currentUser.value.email
+                email: user.value.email
             });
         }
         
@@ -803,11 +810,11 @@ const sendTestEmail = async (emailType) => {
         console.error('Ошибка при отправке тестового письма:', error);
         
         // Используем Hawk для отслеживания ошибки
-        if (currentUser.value.hawk) {
+        if (currentUser.value && currentUser.value.hawk) {
             currentUser.value.hawk.sendError(error, {
                 type: 'email_sending_error',
                 emailType,
-                email: currentUser.value?.email
+                email: user.value.email
             });
         }
         
@@ -818,7 +825,7 @@ const sendTestEmail = async (emailType) => {
 
 // Проверяем, вошел ли пользователь через Яндекс
 const checkYandexUser = () => {
-    isYandexUser.value = !!localStorage.getItem('yandexAvatarUrl');
+    isYandexUser.value = !!localStorage.getItem('isYandexAuth');
 };
 
 // Метод для получения URL изображения профиля с учетом аватара Яндекса
@@ -828,15 +835,18 @@ const getProfileImageUrl = () => {
         return `${apiBaseUrl}${user.value.profile_image}`;
     }
     
-    // Если есть аватар Яндекса
-    if (yandexAvatarUrl.value) {
-        return yandexAvatarUrl.value;
-    }
-    
-    // Если есть сохраненный в localStorage URL аватара Яндекса
-    const storedYandexAvatar = localStorage.getItem('yandexAvatarUrl');
-    if (storedYandexAvatar) {
-        return storedYandexAvatar;
+    // Если пользователь авторизовался через Яндекс
+    if (isYandexUser.value) {
+        // Если есть аватар Яндекса в переменной
+        if (yandexAvatarUrl.value) {
+            return yandexAvatarUrl.value;
+        }
+        
+        // Если есть сохраненный в localStorage URL аватара Яндекса
+        const storedYandexAvatar = localStorage.getItem('yandexAvatarUrl');
+        if (storedYandexAvatar) {
+            return storedYandexAvatar;
+        }
     }
     
     // В противном случае возвращаем изображение по умолчанию
@@ -1094,6 +1104,22 @@ const getProfileImageUrl = () => {
 
 .info-value.email {
     color: #6b46c1;
+}
+
+.info-value.social-account {
+    display: flex;
+    align-items: center;
+}
+
+.social-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    margin-right: 8px;
+    font-weight: bold;
 }
 
 /* Форма редактирования */
@@ -1758,11 +1784,23 @@ const getProfileImageUrl = () => {
     width: 24px;
     height: 24px;
     border-radius: 50%;
-    color: white;
+    margin-right: 8px;
     font-weight: bold;
 }
 
 .social-icon.yandex {
-    background-color: #FF0000;
+    background-color: #ffcc00;
+    color: #000;
+}
+
+.social-badge {
+    display: inline-block;
+    margin-left: 10px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background-color: #ffcc00;
+    color: #000;
+    font-size: 12px;
+    font-weight: 600;
 }
 </style>

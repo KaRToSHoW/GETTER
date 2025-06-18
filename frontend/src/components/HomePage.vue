@@ -35,18 +35,20 @@
                     }
                 }"
                 :loop="true"
+                :loopedSlides="3"
+                :loop-additional-slides="3"
                 class="promo-swiper" 
                 @swiper="onPromoSwiper"
-            @slideChange="onSlideChange">
+                @slideChange="onSlideChange">
                 <swiper-slide class="promo-slide">
-                <div class="promo-banner">
+                    <div class="promo-banner">
                         <div class="promo-content">
                             <span class="promo-label">Акция месяца</span>
                             <h2 class="promo-title">Умная колонка</h2>
                             <p class="promo-text">Мощный звук и современный дизайн</p>
                             <p class="promo-discount">СКИДКА 30% ПРИ ПОКУПКЕ КОМПЛЕКТА</p>
                             <button class="promo-button">Подробнее</button>
-                    </div>
+                        </div>
                         <div class="promo-image-container">
                             <div class="promo-icon-wrapper">
                                 <div class="icon-speaker">
@@ -61,8 +63,8 @@
                             <div class="promo-badge">-30%</div>
                         </div>
                         <div class="promo-decoration promo-circles"></div>
-                </div>
-            </swiper-slide>
+                    </div>
+                </swiper-slide>
                 <swiper-slide class="promo-slide">
                     <div class="promo-banner promo-banner-dark">
                         <div class="promo-content">
@@ -71,7 +73,7 @@
                             <p class="promo-text">Идеальное звучание в любом месте</p>
                             <p class="promo-discount">СКИДКА 20% НА ВСЕ АУДИО</p>
                             <button class="promo-button">Смотреть</button>
-                    </div>
+                        </div>
                         <div class="promo-image-container">
                             <div class="promo-icon-wrapper">
                                 <div class="icon-headphones">
@@ -91,8 +93,8 @@
                             <div class="promo-badge">-20%</div>
                         </div>
                         <div class="promo-decoration promo-waves"></div>
-                </div>
-            </swiper-slide>
+                    </div>
+                </swiper-slide>
                 <swiper-slide class="promo-slide">
                     <div class="promo-banner promo-banner-gradient">
                         <div class="promo-content">
@@ -101,7 +103,7 @@
                             <p class="promo-text">Максимальная производительность</p>
                             <p class="promo-discount">СКИДКА 15% + ИГРОВАЯ МЫШЬ В ПОДАРОК</p>
                             <button class="promo-button">Выбрать</button>
-                    </div>
+                        </div>
                         <div class="promo-image-container">
                             <div class="promo-icon-wrapper">
                                 <div class="icon-laptop">
@@ -122,11 +124,11 @@
                             <div class="promo-badge">-15%</div>
                         </div>
                         <div class="promo-decoration promo-dots"></div>
-                </div>
-            </swiper-slide>
+                    </div>
+                </swiper-slide>
                 <div class="swiper-button-next promo-next"></div>
                 <div class="swiper-button-prev promo-prev"></div>
-        </swiper>
+            </swiper>
         </div>
 
         <div class="advantages-section animated-section" data-section="advantages" :class="{ 'fade-in-up': sectionsVisible.advantages }">
@@ -162,7 +164,7 @@
                 :modules="modules"
                 :slides-per-view="slidesPerView.reviews"
                 :space-between="20"
-                :loop="true"
+                :loop="recentReviews.length > slidesPerView.reviews"
                 :autoplay="{
                     delay: 3000,
                     disableOnInteraction: false,

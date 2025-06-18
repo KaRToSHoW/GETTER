@@ -17,6 +17,7 @@ import AdminUserDetails from './components/admin/AdminUserDetails.vue'
 import AdminCreateCategory from './components/admin/AdminCreateCategory.vue'
 import AdminCreateProduct from './components/admin/AdminCreateProduct.vue'
 import AdminOrderManagement from './components/admin/AdminOrderManagement.vue'
+import PageUnderConstruction from './components/PageUnderConstruction.vue'
 
 const routes = [
     { path: '/login', component: LoginForm },
@@ -39,6 +40,19 @@ const routes = [
         { path: 'orders', name: 'AdminOrderManagement', component: AdminOrderManagement }
     ] },
     { path: '/auth/yandex/callback', name: 'YandexCallback', component: LoginForm },
+    
+    // Недостающие маршруты
+    { path: '/promotions', name: 'promotions', component: PageUnderConstruction },
+    { path: '/about', name: 'about', component: PageUnderConstruction },
+    { path: '/delivery', name: 'delivery', component: PageUnderConstruction },
+    { path: '/how-to-order', name: 'how-to-order', component: PageUnderConstruction },
+    { path: '/faq', name: 'faq', component: PageUnderConstruction },
+    { path: '/returns', name: 'returns', component: PageUnderConstruction },
+    { path: '/warranty', name: 'warranty', component: PageUnderConstruction },
+    { path: '/contacts', name: 'contacts', component: PageUnderConstruction },
+    { path: '/terms', name: 'terms', component: PageUnderConstruction },
+    { path: '/privacy', name: 'privacy', component: PageUnderConstruction },
+    
     { path: '/', redirect: '/home' },
 ]
 

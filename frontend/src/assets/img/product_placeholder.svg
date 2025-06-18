@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="productBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f8f9fa" />
+      <stop offset="100%" stop-color="#e9ecef" />
+    </linearGradient>
+    <linearGradient id="productOverlay" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ced4da" />
+      <stop offset="100%" stop-color="#adb5bd" />
+    </linearGradient>
+    <filter id="productShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="1" />
+      <feOffset dx="0" dy="1" result="offsetblur" />
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.15" />
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Фоновый прямоугольник с закругленными углами -->
+  <rect width="100" height="100" rx="10" ry="10" fill="url(#productBg)" />
+  
+  <!-- Область для изображения продукта -->
+  <rect x="10" y="10" width="80" height="55" rx="6" ry="6" fill="url(#productOverlay)" filter="url(#productShadow)" />
+  
+  <!-- Иконка фотоаппарата -->
+  <g transform="translate(38, 30)" fill="#ffffff">
+    <circle cx="12" cy="12" r="11" fill="none" stroke="#ffffff" stroke-width="2" />
+    <circle cx="12" cy="12" r="5" fill="#ffffff" />
+    <rect x="20" y="6" width="4" height="10" rx="2" ry="2" fill="#ffffff" />
+  </g>
+  
+  <!-- Имитация информации о продукте -->
+  <rect x="15" y="75" width="70" height="5" rx="2" ry="2" fill="#adb5bd" />
+  <rect x="15" y="85" width="45" height="5" rx="2" ry="2" fill="#ced4da" />
+  
+  <!-- Текст -->
+  <text x="50" y="40" font-family="Arial, sans-serif" font-size="9" text-anchor="middle" fill="white" font-weight="bold">ИЗОБРАЖЕНИЕ</text>
+  <text x="50" y="50" font-family="Arial, sans-serif" font-size="8" text-anchor="middle" fill="white">ТОВАРА</text>
+</svg> 

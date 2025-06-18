@@ -4,7 +4,7 @@
         <div class="auth-container">
             <div class="auth-banner">
                 <div class="logo-container">
-                    <img src="https://via.placeholder.com/80" alt="Getter Logo" class="logo-image" />
+                    <img src="@/assets/img/getter_logo.svg" alt="Getter Logo" class="logo-image" />
                     <h1 class="logo-text">GETTER</h1>
                 </div>
                 <p class="welcome-text">
@@ -58,11 +58,11 @@
 
                     <div class="social-auth">
                         <button class="social-button google">
-                            <img src="https://via.placeholder.com/24" alt="Google" />
+                            <img src="@/assets/img/google_icon.svg" alt="Google" />
                             <span>Войти через Google</span>
                         </button>
                         <button class="social-button vk">
-                            <img src="https://via.placeholder.com/24" alt="VK" />
+                            <img src="@/assets/img/vk_icon.svg" alt="VK" />
                             <span>Войти через VK</span>
                         </button>
                         <div id="yandex-login"></div>
@@ -167,11 +167,16 @@ const handleYandexLogin = (token) => {
         if (response.data.user) {
             localStorage.setItem('username', response.data.user.username);
             localStorage.setItem('userId', response.data.user.id);
-            localStorage.setItem('userEmail', response.data.user.email);
-            localStorage.setItem('userFirstName', response.data.user.first_name);
-            localStorage.setItem('userLastName', response.data.user.last_name);
             
-            // Сохраняем URL изображения профиля
+            // Проставляем флаг, что вход через Яндекс
+            localStorage.setItem('isYandexAuth', 'true');
+            
+            // Если пользователь администратор, сохраняем эту информацию
+            if (response.data.user.is_superuser) {
+                localStorage.setItem('isAdmin', 'true');
+            }
+            
+            // Сохраняем URL изображения профиля, если оно есть
             if (response.data.user.profile_image) {
                 localStorage.setItem('userProfileImage', response.data.user.profile_image);
             }
@@ -179,11 +184,6 @@ const handleYandexLogin = (token) => {
             // Сохраняем URL аватара Яндекса как резервный вариант
             if (response.data.user.yandex_avatar_url) {
                 localStorage.setItem('yandexAvatarUrl', response.data.user.yandex_avatar_url);
-            }
-            
-            // Если пользователь администратор, сохраняем эту информацию
-            if (response.data.user.is_superuser) {
-                localStorage.setItem('isAdmin', 'true');
             }
         }
         
@@ -232,6 +232,9 @@ const handleLogin = async () => {
             localStorage.setItem('refreshToken', response.data.refresh); // Используем единый формат имен
             localStorage.setItem('username', username.value);
 
+            // Удаляем флаг Яндекс аутентификации, если он был
+            localStorage.removeItem('isYandexAuth');
+            
             // Устанавливаем заголовок по умолчанию для всех будущих запросов
             axios.defaults.headers.common['Authorization'] = `Bearer ${response.data.access}`;
 

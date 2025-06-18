@@ -96,13 +96,14 @@
                     
                     <div class="social-auth">
                         <button class="social-button google">
-                            <img src="https://via.placeholder.com/24" alt="Google" />
-                            <span>Зарегистрироваться через Google</span>
+                            <img src="@/assets/img/google_icon.svg" alt="Google" />
+                            <span>Регистрация через Google</span>
                         </button>
                         <button class="social-button vk">
-                            <img src="https://via.placeholder.com/24" alt="VK" />
-                            <span>Зарегистрироваться через VK</span>
+                            <img src="@/assets/img/vk_icon.svg" alt="VK" />
+                            <span>Регистрация через VK</span>
                         </button>
+                        <div id="yandex-register"></div>
                     </div>
                     
                     <p class="auth-redirect">
