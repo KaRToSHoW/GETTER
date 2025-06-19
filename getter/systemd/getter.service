@@ -1,0 +1,16 @@
+[Unit]
+Description=Getter Django Application
+After=network.target postgresql.service redis.service
+
+[Service]
+User=getter
+Group=www-data
+WorkingDirectory=/var/www/getter
+Environment="PATH=/var/www/getter/venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=/var/www/getter/.env
+ExecStart=/var/www/getter/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8000 getter.wsgi:application --access-logfile /var/log/getter/access.log --error-logfile /var/log/getter/error.log
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target 

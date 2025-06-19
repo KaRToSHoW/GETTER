@@ -13,6 +13,26 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 import os
 from pathlib import Path
 from datetime import timedelta
+import environ
+
+# Инициализация environ
+env = environ.Env(
+    # установка дефолтных значений
+    DEBUG=(bool, False),
+    SECRET_KEY=(str, 'django-insecure-*^45df%6t_vp3%jsy&i7silbittwc!^_1rn2yi9n(2_zo5jo=#'),
+    DATABASE_ENGINE=(str, 'django.db.backends.sqlite3'),
+    DATABASE_NAME=(str, 'db.sqlite3'),
+    DATABASE_USER=(str, ''),
+    DATABASE_PASSWORD=(str, ''),
+    DATABASE_HOST=(str, ''),
+    DATABASE_PORT=(str, ''),
+    ALLOWED_HOSTS=(list, ['localhost', '127.0.0.1']),
+    CORS_ALLOWED_ORIGINS=(list, ['http://localhost:8080']),
+)
+
+# Чтение .env файла
+environ.Env.read_env(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -21,12 +41,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-*^45df%6t_vp3%jsy&i7silbittwc!^_1rn2yi9n(2_zo5jo=#'
+SECRET_KEY = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env('ALLOWED_HOSTS')
 
 
 # Application definition
@@ -38,7 +58,6 @@ INSTALLED_APPS = [
     'django_filters',
     'main',
     'users',
-    'silk',
     'django_extensions',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -49,6 +68,10 @@ INSTALLED_APPS = [
     'django_celery_beat',
 ]
 
+# Добавляем Silk только в режиме отладки
+if DEBUG:
+    INSTALLED_APPS.append('silk')
+
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -58,8 +81,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'silk.middleware.SilkyMiddleware',
 ]
+
+# Добавляем Silk middleware только в режиме отладки
+if DEBUG:
+    MIDDLEWARE.append('silk.middleware.SilkyMiddleware')
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -80,7 +106,10 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': True,  # Обновление refresh-токена при каждом обновлении access-токена
 }
 
-CORS_ALLOW_ALL_ORIGINS = True  # Разрешить всем (на проде лучше указать конкретные домены)
+# CORS настройки
+CORS_ALLOWED_ORIGINS = env('CORS_ALLOWED_ORIGINS')
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True  # Только в режиме разработки
 
 ROOT_URLCONF = 'getter.urls'
 
@@ -106,22 +135,25 @@ WSGI_APPLICATION = 'getter.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': 'WEB2025',
-#         'USER': 'postgres',
-#         'PASSWORD': 'root',
-#         'HOST': 'localhost',
-#         'PORT': 5432,
-#     }
-# }
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Настройка базы данных в зависимости от окружения
+if env('DATABASE_ENGINE') == 'django.db.backends.postgresql':
+    DATABASES = {
+        'default': {
+            'ENGINE': env('DATABASE_ENGINE'),
+            'NAME': env('DATABASE_NAME'),
+            'USER': env('DATABASE_USER'),
+            'PASSWORD': env('DATABASE_PASSWORD'),
+            'HOST': env('DATABASE_HOST'),
+            'PORT': env('DATABASE_PORT'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / env('DATABASE_NAME'),
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
@@ -142,10 +174,6 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-MIDDLEWARE = ['corsheaders.middleware.CorsMiddleware'] + MIDDLEWARE
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:8080",
-]
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
 
@@ -165,10 +193,11 @@ FILE_CHARSET = 'utf-8'
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = env('MEDIA_URL', default='/media/')
+MEDIA_ROOT = env('MEDIA_ROOT', default=os.path.join(BASE_DIR, 'media'))
 
-STATIC_URL = '/static/'
+STATIC_URL = env('STATIC_URL', default='/static/')
+STATIC_ROOT = env('STATIC_ROOT', default=os.path.join(BASE_DIR, 'static_collected'))
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 
 AUTH_USER_MODEL = 'users.User'
@@ -178,19 +207,30 @@ AUTH_USER_MODEL = 'users.User'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Настройки для отправки электронной почты через Mailhog
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'localhost'  # Mailhog работает локально
-EMAIL_PORT = 1025  # Стандартный SMTP порт Mailhog
-EMAIL_USE_TLS = False
-EMAIL_USE_SSL = False
-EMAIL_HOST_USER = ''
-EMAIL_HOST_PASSWORD = ''
-DEFAULT_FROM_EMAIL = 'test@example.com'
+# Email settings
+if DEBUG:
+        # Локальные настройки для Mailhog
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = 'localhost'  # Mailhog работает локально
+    EMAIL_PORT = 1025  # Стандартный SMTP порт Mailhog
+    EMAIL_USE_TLS = False
+    EMAIL_USE_SSL = False
+    EMAIL_HOST_USER = ''
+    EMAIL_HOST_PASSWORD = ''
+    DEFAULT_FROM_EMAIL = 'test@example.com'
+else:
+    # Настройки продакшен почты
+    EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
+    EMAIL_HOST = env('EMAIL_HOST', default='')
+    EMAIL_PORT = env('EMAIL_PORT', default=587)
+    EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
+    EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
+    EMAIL_USE_TLS = env('EMAIL_USE_TLS', default=True)
+    DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@example.com')
 
 # Настройки Celery
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -199,3 +239,12 @@ CELERY_TIMEZONE = TIME_ZONE
 # Импортируем расписание задач
 from .celery_schedule import CELERY_BEAT_SCHEDULE
 CELERY_BEAT_SCHEDULE = CELERY_BEAT_SCHEDULE
+
+# Security settings для продакшена
+if not DEBUG:
+    CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
+    SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=True)
+    SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=True)
+    CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=True)
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True

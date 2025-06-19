@@ -67,14 +67,7 @@ def generate_daily_sales_report() -> Dict[str, Any]:
     
     logger.info(f"Сгенерирован отчет о продажах за {yesterday}")
     
-    # Можно отправить отчет по email администраторам
-    # send_mail(
-    #     f'Отчет о продажах за {yesterday}',
-    #     f'Всего заказов: {total_orders}\nОбщая выручка: {total_revenue}',
-    #     settings.DEFAULT_FROM_EMAIL,
-    #     [admin[1] for admin in settings.ADMINS],
-    #     fail_silently=False,
-    # )
+
     
     return report
 
