@@ -397,3 +397,36 @@ class Wishlist(models.Model):
             Строка с информацией о пользователе и товаре
         """
         return f"{self.user.username} - {self.product.name}"
+
+class PEExam(models.Model):
+    """
+    Модель для хранения информации о экзаменах.
+    
+    Attributes:
+        name: Название экзамена
+        created_at: Дата создания записи
+        exam_date: Дата проведения экзамена
+        image: Изображение к экзамену
+        users: Пользователи, которые должны писать экзамен
+        is_public: Статус публикации экзамена
+    """
+    name = models.CharField(max_length=255, verbose_name="Название экзамена")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
+    exam_date = models.DateTimeField(verbose_name="Дата проведения")
+    image = models.ImageField(upload_to='exam_images/', blank=True, null=True, verbose_name="Изображение задания")
+    users = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="exams", verbose_name="Участники")
+    is_public = models.BooleanField(default=False, verbose_name="Опубликовано")
+
+    class Meta:
+        verbose_name = "Экзамен"
+        verbose_name_plural = "Экзамены"
+        ordering = ['-exam_date']
+
+    def __str__(self) -> str:
+        """
+        Строковое представление экзамена.
+        
+        Returns:
+            Название экзамена
+        """
+        return self.name
