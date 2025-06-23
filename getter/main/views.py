@@ -10,7 +10,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 import random
 from decimal import Decimal
-from .models import Category, Product, Order, OrderItem, Review, Wishlist
+from .models import Category, Product, Order, OrderItem, Review, Wishlist, PEExam
 from .serializers import CategorySerializer, ProductSerializer, OrderSerializer, ReviewSerializer, OrderItemSerializer, WishlistSerializer
 from .filters import ProductFilter
 from users.utils import send_order_status_update
@@ -962,3 +962,20 @@ def send_order_notification(request, order_id):
         return Response({'error': 'Заказ не найден'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def peexam_list(request):
+    """
+    Отображение списка опубликованных экзаменов.
+    """
+    # Получаем только опубликованные экзамены
+    exams = PEExam.objects.filter(is_public=True).order_by('-exam_date')
+    
+    # Рендерим шаблон с контекстом
+    return render(request, 'main/peexam.html', {
+        'exams': exams,
+        'title': 'Экзамены',
+        'fio': 'Фролов Михаил Сергеевич',
+        'group': '231-321'  
+    })

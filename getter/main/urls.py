@@ -7,7 +7,7 @@ from .views import (
     ReviewListCreateView, get_favorites, user_orders, check_user_purchased_product,
     popular_wishlist_products, user_activity, FilteredProductListView,
     new_products, popular_products, recent_reviews, create_order,
-    send_order_notification
+    send_order_notification, peexam_list
 )
 
 urlpatterns = [
@@ -36,4 +36,5 @@ urlpatterns = [
     path('api/user-activity/', user_activity, name='user_activity'),
     path('products/search/advanced/', FilteredProductListView.as_view(), name='advanced-product-search'),
     path('recent-reviews/', recent_reviews, name='recent_reviews'),
+    path('peexam/', peexam_list, name='peexam-list'),
 ]
