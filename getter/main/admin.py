@@ -10,7 +10,7 @@ import os
 from typing import Any, List, Optional, Tuple, Union, Dict, Set
 from django.http.request import HttpRequest
 from django.db.models.query import QuerySet
-from .models import Category, Product, Order, OrderItem, Review, Wishlist
+from .models import Category, Product, Order, OrderItem, Review, Wishlist, PEExam
 
 # Регистрируем шрифт DejaVuSerif
 FONT_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'fonts', 'DejaVuSerif.ttf')
@@ -430,3 +430,50 @@ class WishlistAdmin(admin.ModelAdmin):
     search_fields = ('user__username', 'product__name', 'product__sku')  # Добавьте поиск по 'product__sku'
     ordering = ['-added_at']  # Сортировка по времени (по убыванию)
 
+class PEExamAdmin(admin.ModelAdmin):
+    """
+    Админ-класс для модели PEExam.
+    
+    Attributes:
+        list_display: Поля, отображаемые в списке экзаменов
+        search_fields: Поля, по которым осуществляется поиск
+        list_filter: Поля, по которым осуществляется фильтрация
+        date_hierarchy: Поле для иерархической навигации по датам
+        filter_horizontal: Поля типа ManyToMany для удобного редактирования
+    """
+    list_display = ('name', 'exam_date', 'is_public', 'created_at')
+    search_fields = ('name', 'users__email')
+    list_filter = ('is_public', 'created_at')
+    date_hierarchy = 'exam_date'
+    filter_horizontal = ('users',)
+    
+    def get_search_results(self, request, queryset, search_term):
+        """
+        Переопределяет метод поиска для добавления поиска по конкретной дате экзамена.
+        
+        Args:
+            request: Объект запроса
+            queryset: Исходный QuerySet
+            search_term: Поисковый запрос
+            
+        Returns:
+            Кортеж из (отфильтрованный QuerySet, Boolean)
+        """
+        queryset, use_distinct = super().get_search_results(request, queryset, search_term)
+        
+        # Добавляем поиск по конкретной дате, если search_term похож на дату
+        try:
+            import datetime
+            # Попробуем распарсить дату из поискового запроса
+            if '-' in search_term:
+                date_obj = datetime.datetime.strptime(search_term, '%Y-%m-%d').date()
+                # Фильтруем записи, у которых exam_date в этот день
+                queryset |= self.model.objects.filter(exam_date__date=date_obj)
+        except (ValueError, TypeError):
+            # Если не удалось распарсить дату, просто игнорируем
+            pass
+            
+        return queryset, use_distinct
+
+# Регистрируем модель и админ-класс
+admin.site.register(PEExam, PEExamAdmin)
