@@ -371,7 +371,7 @@ class ReviewSerializer(serializers.ModelSerializer):
         product = self.context.get('product')
         user = self.context.get('user')
         if not product or not user:
-            raise serializers.ValidationError("Product or user is missing in context")
+            raise serializers.ValidationError("Продукт или пользователь отсутствуют в контексте")
         review = Review.objects.create(
             product=product,
             user=user,

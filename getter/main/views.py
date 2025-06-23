@@ -91,6 +91,13 @@ class ProductListView(generics.ListCreateAPIView):
         Дополнительный контекст для сериализатора
         """
         context = super().get_serializer_context()
+        # Добавляем статистику по товарам
+        context['products_count'] = Product.objects.count()
+        context['products_in_stock'] = Product.objects.filter(stock__gt=0).count()
+        context['products_with_discount'] = Product.objects.filter(discount__gt=0).count()
+        # Добавляем информацию о последнем просмотренном товаре из сессии
+        if self.request.session.get('last_viewed_product'):
+            context['last_viewed_product_id'] = self.request.session.get('last_viewed_product')
         return context
 
 class ProductDetailView(APIView):
